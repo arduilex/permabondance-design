@@ -71,6 +71,8 @@
   #zoneLayer .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;vector-effect:non-scaling-stroke;cursor:copy;pointer-events:auto}
   #zoneLayer .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;vector-effect:non-scaling-stroke;cursor:grab;pointer-events:auto}
   #zoneLayer .zmove-ic{stroke:#fff;stroke-width:2;fill:none;vector-effect:non-scaling-stroke;pointer-events:none}
+  /* Poignées/points de zonage : taille constante à l'écran quel que soit le zoom */
+  #zoneLayer .vhandle,#zoneLayer .mhandle,#zoneLayer .zmove,#zoneLayer .zmove-ic,#zoneLayer .vtx{transform:scale(var(--inv,1));transform-box:fill-box;transform-origin:center}
   .zhelp{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
   .drawbar{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:8px 12px;border-radius:10px;display:none;align-items:center;gap:10px;z-index:8;font-size:13px;box-shadow:var(--shadow)}
   .drawbar.on{display:flex}
@@ -564,7 +566,7 @@
   function buildZoneEditors(){
     const z=state.zones.find(x=>x.id===selZone); if(!z)return;
     const g=$("#editGroup"); if(!g)return;
-    const R=Math.max(4,Math.round(imgNatW*0.008));
+    const R=7; // rayon en px écran (les poignées sont contre-scalées en CSS)
     const X=p=>(p.x/100*imgNatW).toFixed(1), Y=p=>(p.y/100*imgNatH).toFixed(1);
     let s="";
     // milieux d'arêtes (pour ajouter un point)
@@ -588,7 +590,11 @@
   function startVertexDrag(e,z,i,handle,poly){
     e.preventDefault(); e.stopPropagation(); downZone=null; downMarker=null;
     try{handle.setPointerCapture(e.pointerId);}catch(_){}
+    const sx0=e.clientX, sy0=e.clientY; let movedV=false;
     const move=ev=>{
+      // ignore les micro-mouvements : un simple clic ne re-rend pas la poignée, ce qui laisse passer le double-clic (suppression)
+      if(!movedV && Math.abs(ev.clientX-sx0)+Math.abs(ev.clientY-sy0)<=3) return;
+      movedV=true;
       const p=clientToPct(ev.clientX,ev.clientY);
       z.points[i]={x:p.x,y:p.y};
       handle.setAttribute("cx",(p.x/100*imgNatW).toFixed(1));
@@ -596,7 +602,8 @@
       if(poly) poly.setAttribute("points",ptsStr(z.points));
     };
     const up=ev=>{ ev.stopPropagation(); try{handle.releasePointerCapture(e.pointerId);}catch(_){}
-      handle.removeEventListener("pointermove",move); handle.removeEventListener("pointerup",up); render(); scheduleSave(); };
+      handle.removeEventListener("pointermove",move); handle.removeEventListener("pointerup",up);
+      if(movedV){ render(); scheduleSave(); } };
     handle.addEventListener("pointermove",move); handle.addEventListener("pointerup",up);
   }
 
@@ -634,7 +641,7 @@
     const g=$("#draftGroup"); if(!g)return;
     if(!addingZone || !draft.length){ g.innerHTML=""; return; }
     const preview=draftCursor?draft.concat([draftCursor]):draft.slice();
-    const r=Math.max(3,Math.round(imgNatW*0.006));
+    const r=5; // px écran (contre-scalé en CSS)
     let s="";
     if(draft.length>=3) s+=`<polygon class="draftline" points="${ptsStr(draft)}"/>`;
     if(preview.length>=2) s+=`<polyline class="draftline" style="fill:none" points="${ptsStr(preview)}"/>`;
