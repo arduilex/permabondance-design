@@ -31,6 +31,8 @@ async function init() {
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // Échelle de calibration (m/px + points de référence), ajoutée après coup
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS scale JSONB`);
   console.log("[db] prêt");
 }
 

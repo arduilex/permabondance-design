@@ -55,6 +55,8 @@
   .lblbox{position:absolute;transform:translate(-50%,-50%);pointer-events:none}
   .lblbox .meta{position:absolute;left:50%;top:86%;margin-top:2px;transform:translateX(-50%) scale(var(--inv,1));transform-origin:top center;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 7px;border-radius:6px;white-space:nowrap;pointer-events:none;max-width:220px;overflow:hidden;text-overflow:ellipsis}
   .lblbox.sel .meta{background:var(--accent-dark)}
+  /* Étiquette de catégorie de zone : taille constante à l'écran (anti-jitter au zoom) */
+  .zlbl{position:absolute;transform:translate(-50%,-50%) scale(var(--inv,1));transform-origin:center;pointer-events:none;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;letter-spacing:.3px;text-shadow:0 0 3px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.7)}
   .field input[type=range]{padding:0;cursor:pointer}
   .rangeval{font-size:12px;color:var(--muted);margin-top:4px}
 
@@ -76,6 +78,7 @@
   .drawbar .ok{background:var(--accent);color:#fff}
   .drawbar .ok:disabled{opacity:.5;cursor:not-allowed}
   .drawbar .cancel{background:rgba(255,255,255,.2);color:#fff}
+  .drawbar input{border:none;border-radius:6px;padding:5px 8px;font-size:13px;width:96px}
   .zone-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px;cursor:pointer}
   .zone-row:hover{border-color:var(--accent);background:#f7faf4}
   .zone-row.sel{border-color:var(--accent);background:#eef3e9}
@@ -92,6 +95,13 @@
   .zoom button{width:38px;height:38px;border:none;border-radius:9px;background:var(--panel);box-shadow:var(--shadow);font-size:18px;font-weight:700;cursor:pointer;color:var(--ink)}
   .zoom button:hover{background:#eef3e9}
   .hint{position:absolute;left:14px;bottom:14px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;z-index:6;max-width:260px}
+  /* Barre d'échelle réelle */
+  .scalebar{position:absolute;left:14px;bottom:14px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(255,255,255,.88);padding:5px 9px;border-radius:7px;box-shadow:var(--shadow);font-size:11px;font-weight:700;color:var(--ink)}
+  .scalebar .bar{height:5px;background:var(--accent-dark);border-radius:2px;min-width:20px}
+  /* Couche de calibration (points + ligne de référence) */
+  #calibLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:2}
+  #calibLayer .calibpt{fill:#ffd34d;stroke:#3a5c2b;stroke-width:2;vector-effect:non-scaling-stroke}
+  #calibLayer .calibline{stroke:#ffd34d;stroke-width:3;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
 
   /* Sidebar */
   aside{width:340px;flex:none;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
@@ -144,7 +154,7 @@
   <input class="meta" id="planDate" type="date" title="Date de présentation">
   <span class="save" id="saveStatus"></span>
   <div class="spacer"></div>
-  <button class="btn ghost" id="btnLoad">Remplacer l'image</button>
+  <button class="btn ghost" id="btnScale" disabled title="Définir l'échelle réelle">Échelle</button>
   <button class="btn ghost" id="btnShare">Copier le lien</button>
   <a class="btn" href="/">← Projets</a>
   <input type="file" id="fileImg" accept="image/*" class="file-hidden">
@@ -156,6 +166,7 @@
       <div id="world">
         <img id="plan-img" alt="">
         <svg id="zoneLayer" xmlns="http://www.w3.org/2000/svg"></svg>
+        <svg id="calibLayer" xmlns="http://www.w3.org/2000/svg"></svg>
         <div id="labelLayer"></div>
       </div>
     </div>
@@ -164,6 +175,15 @@
       <span id="drawInfo">Cliquez pour poser les points de la zone</span>
       <button class="ok" id="drawDone">Terminer</button>
       <button class="cancel" id="drawCancel">Annuler</button>
+    </div>
+
+    <div class="drawbar" id="calibbar">
+      <span id="calibInfo">Cliquez un 1ᵉʳ point sur l'image.</span>
+      <span id="calibDistWrap" style="display:none;align-items:center;gap:8px">
+        <input id="calibDist" type="number" min="0" step="0.1" placeholder="distance"> m
+        <button class="ok" id="calibOk">Valider</button>
+      </span>
+      <button class="cancel" id="calibCancel">Annuler</button>
     </div>
 
     <div class="empty" id="emptyState">
@@ -176,6 +196,10 @@
       <button id="zIn" title="Zoom avant">+</button>
       <button id="zOut" title="Zoom arrière">−</button>
       <button id="zFit" title="Ajuster" style="font-size:13px">⤢</button>
+    </div>
+    <div class="scalebar" id="scaleBar" style="display:none">
+      <span id="scaleBarLabel"></span>
+      <div class="bar" id="scaleBarBar"></div>
     </div>
     <!-- <div class="hint" id="hint">Glisser = déplacer la carte · molette = zoom · clic sur une plante = la sélectionner · pour la déplacer, sélectionnez-la puis glissez la poignée centrale.</div> -->
   </div>
@@ -267,10 +291,13 @@
   // Identifiant du projet (URL /p/<id>)
   const PID = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
 
-  let state={ client:"", planDate:"", imageUrl:null, plants:[], zones:[] };
+  let state={ client:"", planDate:"", imageUrl:null, plants:[], zones:[], scale:null };
   let scale=1, tx=0, ty=0, imgNatW=0, imgNatH=0;
   let selId=null, adding=false, nextNum=1;
   let selZone=null, nextZoneNum=1, addingZone=false, draft=[], draftCursor=null, currentTab="list";
+  let calibMode=false, calibPts=[], pendingCalib=false;
+  const DEFAULT_M=4; // diamètre de plante par défaut, en mètres, quand l'échelle est connue
+  function isCal(){ return !!(state.scale && state.scale.mPerPx>0); }
 
   const $=s=>document.querySelector(s);
   const vp=$("#viewport"), world=$("#world"), img=$("#plan-img");
@@ -278,7 +305,7 @@
 
   /* ---------- Sauvegarde serveur (autosave) ---------- */
   let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSaved="";
-  function snapshot(){ return JSON.stringify({n:state.client,d:state.planDate,p:state.plants,z:state.zones}); }
+  function snapshot(){ return JSON.stringify({n:state.client,d:state.planDate,p:state.plants,z:state.zones,s:state.scale}); }
   function setSaveStatus(s){
     const el=$("#saveStatus"); el.classList.remove("err");
     if(s==="pending") el.textContent="Modifications…";
@@ -301,7 +328,7 @@
     try{
       const r=await fetch("/api/projects/"+encodeURIComponent(PID),{
         method:"PATCH", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones })
+        body:JSON.stringify({ name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones, scale:state.scale })
       });
       if(r.ok){ lastSaved=snap; setSaveStatus("saved"); }
       else setSaveStatus("error");
@@ -314,7 +341,7 @@
   });
 
   /* ---------- View transform ---------- */
-  function applyTransform(){ world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; world.style.setProperty("--inv",(1/scale).toFixed(4)); }
+  function applyTransform(){ world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; world.style.setProperty("--inv",(1/scale).toFixed(4)); updateScaleBar(); }
   function fit(){
     if(!imgNatW) return;
     const r=vp.getBoundingClientRect();
@@ -358,6 +385,7 @@
   vp.addEventListener("pointerup",e=>{
     const wasMoved=moved;
     if(panning){panning=false;vp.classList.remove("panning");}
+    if(calibMode){ if(!wasMoved) addCalibPoint(e.clientX,e.clientY); downMarker=downZone=null; return; }
     if(addingZone){ if(!wasMoved) addZoneVertex(e.clientX,e.clientY); downMarker=downZone=null; return; }
     if(adding){ if(!wasMoved) placeAt(e.clientX,e.clientY); downMarker=downZone=null; return; }
     if(!wasMoved){ if(downMarker) select(downMarker.getAttribute("data-id")); else if(downZone) selectZone(downZone.getAttribute("data-id")); }
@@ -394,8 +422,10 @@
     selId=id; selZone=null; switchTab("detail"); render();
   }
 
-  function defaultDiam(){ return Math.max(24, Math.round((imgNatW||800)*0.05)); }
-  function diamRange(){ return {min:5, max:400}; }
+  function defaultDiam(){
+    if(isCal()) return Math.max(2, Math.round(DEFAULT_M/state.scale.mPerPx));
+    return Math.max(24, Math.round((imgNatW||800)*0.05));
+  }
 
   function shade(hex,p){
     hex=(hex||"#4f7a3a").replace("#","");
@@ -452,7 +482,6 @@
 
   function renderMarkers(){
     [...world.querySelectorAll(".marker")].forEach(m=>m.remove());
-    const lab=$("#labelLayer"); if(lab) lab.innerHTML="";
     state.plants.forEach(p=>{
       const dm=p.diam||defaultDiam();
       const m=document.createElement("div");
@@ -463,17 +492,32 @@
       m.innerHTML=`<div class="canopy">${iconSVG(p)}</div><div class="handle" title="Glisser pour déplacer">${MOVE_ICON}</div>`;
       m.querySelector(".handle").addEventListener("pointerdown",ev=>startMove(ev,p,m));
       world.appendChild(m);
-      // étiquette dans la couche dédiée (toujours au premier plan, devant les autres plantes)
-      if(lab){
-        const label="#"+p.num+(p.nom?" "+p.nom:"");
-        const gb=document.createElement("div");
-        gb.className="lblbox"+(p.id===selId?" sel":"");
-        gb.dataset.id=p.id;
-        gb.style.left=p.x+"%"; gb.style.top=p.y+"%";
-        gb.style.width=dm+"px"; gb.style.height=dm+"px";
-        gb.innerHTML=`<div class="meta">${esc(label)}</div>`;
-        lab.appendChild(gb);
-      }
+    });
+  }
+
+  // Couche d'étiquettes : catégories de zones puis numéros/noms de plantes, toujours au-dessus
+  function renderLabels(){
+    const lab=$("#labelLayer"); if(!lab) return;
+    lab.innerHTML="";
+    if(!imgNatW) return;
+    state.zones.forEach(z=>{
+      if(!z.cat || !z.points || z.points.length<3) return;
+      const c=centroid(z.points);
+      const zl=document.createElement("div");
+      zl.className="zlbl";
+      zl.style.left=c.x+"%"; zl.style.top=c.y+"%";
+      zl.textContent=z.cat;
+      lab.appendChild(zl);
+    });
+    state.plants.forEach(p=>{
+      const dm=p.diam||defaultDiam();
+      const gb=document.createElement("div");
+      gb.className="lblbox"+(p.id===selId?" sel":"");
+      gb.dataset.id=p.id;
+      gb.style.left=p.x+"%"; gb.style.top=p.y+"%";
+      gb.style.width=dm+"px"; gb.style.height=dm+"px";
+      gb.innerHTML=`<div class="meta">#${p.num}${p.nom?" "+esc(p.nom):""}</div>`;
+      lab.appendChild(gb);
     });
   }
 
@@ -493,18 +537,16 @@
   }
 
   /* ---------- Zones ---------- */
-  function sizeZoneLayer(){ if(!imgNatW)return; zoneLayer.setAttribute("width",imgNatW); zoneLayer.setAttribute("height",imgNatH); zoneLayer.setAttribute("viewBox","0 0 "+imgNatW+" "+imgNatH); }
+  function sizeZoneLayer(){ if(!imgNatW)return; [zoneLayer,$("#calibLayer")].forEach(s=>{ if(!s)return; s.setAttribute("width",imgNatW); s.setAttribute("height",imgNatH); s.setAttribute("viewBox","0 0 "+imgNatW+" "+imgNatH); }); }
   function centroid(pts){ let x=0,y=0; pts.forEach(p=>{x+=p.x;y+=p.y;}); return {x:x/pts.length,y:y/pts.length}; }
   function ptsStr(pts){ return pts.map(p=>(p.x/100*imgNatW).toFixed(1)+","+(p.y/100*imgNatH).toFixed(1)).join(" "); }
 
   function renderZones(){
     if(!imgNatW){ zoneLayer.innerHTML=""; return; }
-    const fz=Math.max(11,Math.round(imgNatW*0.013));
     let svg="";
     state.zones.forEach(z=>{
       const sel=z.id===selZone?" sel":"";
       svg+=`<polygon class="zone${sel}" data-id="${z.id}" points="${ptsStr(z.points)}" fill="${z.color}" fill-opacity="${z.opacity}" stroke="${shade(z.color,-0.35)}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
-      if(z.cat){ const c=centroid(z.points); svg+=`<text x="${(c.x/100*imgNatW).toFixed(1)}" y="${(c.y/100*imgNatH).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" style="font:600 ${fz}px sans-serif;fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:3px">${esc(z.cat)}</text>`; }
     });
     svg+=`<g id="draftGroup"></g><g id="editGroup"></g>`;
     zoneLayer.innerHTML=svg;
@@ -660,20 +702,25 @@
   }
 
   // zone editing
-  $("#zCat").addEventListener("input",e=>{ const z=state.zones.find(x=>x.id===selZone); if(!z)return; z.cat=e.target.value; renderZones(); renderZoneList(); scheduleSave(); });
+  $("#zCat").addEventListener("input",e=>{ const z=state.zones.find(x=>x.id===selZone); if(!z)return; z.cat=e.target.value; renderZones(); renderZoneList(); renderLabels(); scheduleSave(); });
   $("#zOpacity").addEventListener("input",e=>{ const z=state.zones.find(x=>x.id===selZone); if(!z)return; z.opacity=(+e.target.value)/100; $("#zOpacityVal").textContent="Opacité "+e.target.value+"%"; renderZones(); renderZoneList(); scheduleSave(); });
   $("#btnZoneDel").onclick=()=>{ const z=state.zones.find(x=>x.id===selZone); if(!z)return; if(!confirm("Supprimer cette zone ?"))return; state.zones=state.zones.filter(x=>x.id!==selZone); selZone=null; render(); scheduleSave(); };
   $("#btnDrawZone").onclick=startDrawZone;
   $("#drawDone").onclick=finishZone;
   $("#drawCancel").onclick=cancelZone;
   window.addEventListener("keydown",e=>{
+    if(calibMode){
+      if(e.key==="Escape"){ e.preventDefault(); endCalib(); }
+      else if(e.key==="Enter" && calibPts.length>=2){ e.preventDefault(); applyCalibration(); }
+      return;
+    }
     if(!addingZone)return;
     if(e.key==="Enter"){ e.preventDefault(); finishZone(); }
     else if(e.key==="Escape"){ e.preventDefault(); cancelZone(); }
     else if(e.key==="Backspace"){ e.preventDefault(); draft.pop(); updateDrawInfo(); renderDraft(); }
   });
 
-  function render(){ renderMarkers(); renderList(); renderDetail(); renderZones(); renderZoneList(); renderZoneDetail(); if(loaded) scheduleSave(); }
+  function render(){ renderMarkers(); renderList(); renderDetail(); renderZones(); renderZoneList(); renderZoneDetail(); renderLabels(); if(loaded) scheduleSave(); }
 
   function toggleAutre(p){ $("#autreField").style.display=(p.type==="Autre")?"block":"none"; }
 
@@ -684,9 +731,15 @@
     if(!p)return;
     FIELDS.forEach(f=>{ const el=$(`[data-f="${f}"]`); if(el)el.value=p[f]||""; });
     toggleAutre(p);
-    const rg=diamRange(), sr=$("#sizeRange");
-    sr.min=rg.min; sr.max=rg.max; sr.value=p.diam||defaultDiam();
-    $("#sizeVal").textContent="Diamètre ≈ "+Math.round(sr.value)+" px sur l'image";
+    const sr=$("#sizeRange");
+    if(isCal()){
+      const meters=(p.diam||defaultDiam())*state.scale.mPerPx;
+      sr.min="0.3"; sr.max="40"; sr.step="0.1"; sr.value=Math.max(0.3,Math.min(40,meters));
+      $("#sizeVal").textContent="Diamètre ≈ "+meters.toFixed(1).replace(".",",")+" m (réel)";
+    }else{
+      sr.min="5"; sr.max="400"; sr.step="1"; sr.value=p.diam||defaultDiam();
+      $("#sizeVal").textContent="Diamètre ≈ "+Math.round(sr.value)+" px sur l'image";
+    }
     const cp=$("#colorPick"); cp.innerHTML="";
     COLORS.forEach(c=>{
       const lab=document.createElement("label");
@@ -700,10 +753,14 @@
   $("#detailForm").addEventListener("input",e=>{
     const f=e.target.getAttribute("data-f"); if(!f)return;
     const p=state.plants.find(x=>x.id===selId); if(!p)return;
-    if(f==="diam"){ p.diam=+e.target.value; $("#sizeVal").textContent="Diamètre ≈ "+Math.round(p.diam)+" px sur l'image"; renderMarkers(); scheduleSave(); return; }
+    if(f==="diam"){
+      if(isCal()){ const meters=+e.target.value; p.diam=meters/state.scale.mPerPx; $("#sizeVal").textContent="Diamètre ≈ "+meters.toFixed(1).replace(".",",")+" m (réel)"; }
+      else { p.diam=+e.target.value; $("#sizeVal").textContent="Diamètre ≈ "+Math.round(p.diam)+" px sur l'image"; }
+      renderMarkers(); renderLabels(); scheduleSave(); return;
+    }
     p[f]=e.target.value;
     if(f==="type"){ toggleAutre(p); renderMarkers(); renderList(); scheduleSave(); return; }
-    if(f==="nom"||f==="variete"||f==="typeAutre"){ renderMarkers(); renderList(); }
+    if(f==="nom"||f==="variete"||f==="typeAutre"){ renderMarkers(); renderList(); renderLabels(); }
     scheduleSave();
   });
 
@@ -753,8 +810,9 @@
     img.onload=()=>{
       imgNatW=img.naturalWidth; imgNatH=img.naturalHeight;
       emptyState.style.display="none";
-      $("#btnAdd").disabled=false; $("#btnDrawZone").disabled=false;
-      sizeZoneLayer(); fit(); render();
+      $("#btnAdd").disabled=false; $("#btnDrawZone").disabled=false; $("#btnScale").disabled=false;
+      sizeZoneLayer(); fit(); render(); updateScaleBar();
+      if(pendingCalib){ pendingCalib=false; startCalibration(); }
     };
     img.onerror=()=>{ emptyState.style.display="flex"; };
     img.src=url; state.imageUrl=url;
@@ -769,12 +827,82 @@
       const r=await fetch("/api/projects/"+encodeURIComponent(PID)+"/image",{method:"POST",body:fd});
       if(!r.ok){ setSaveStatus("error"); alert("Échec de l'envoi de l'image."); return; }
       const d=await r.json();
+      pendingCalib=true;  // proposer la calibration d'échelle juste après le chargement
       loadImageData(d.image_url + (d.image_url.includes("?")?"":"?t="+Date.now()));
       setSaveStatus("saved");
     }catch(_){ setSaveStatus("error"); alert("Échec de l'envoi de l'image."); }
   };
   const triggerLoad=()=>$("#fileImg").click();
-  $("#btnLoad").onclick=triggerLoad; $("#btnLoad2").onclick=triggerLoad;
+  $("#btnLoad2").onclick=triggerLoad;
+
+  /* ---------- Calibration de l'échelle (2 points + distance réelle) ---------- */
+  function calX(p){ return (p.x/100*imgNatW).toFixed(1); }
+  function calY(p){ return (p.y/100*imgNatH).toFixed(1); }
+  function renderCalib(){
+    const cl=$("#calibLayer"); if(!cl) return;
+    if(!imgNatW || !calibMode){ cl.innerHTML=""; return; }
+    const r=Math.max(3,Math.round(imgNatW*0.006));
+    let s="";
+    if(calibPts.length===2){ s+=`<line class="calibline" x1="${calX(calibPts[0])}" y1="${calY(calibPts[0])}" x2="${calX(calibPts[1])}" y2="${calY(calibPts[1])}"/>`; }
+    calibPts.forEach(p=>{ s+=`<circle class="calibpt" cx="${calX(p)}" cy="${calY(p)}" r="${r}"/>`; });
+    cl.innerHTML=s;
+  }
+  function startCalibration(){
+    if(!imgNatW) return;
+    setAdding(false); if(addingZone) cancelZone();
+    selId=null; selZone=null;
+    calibMode=true; calibPts=[];
+    vp.classList.add("adding");
+    $("#calibInfo").textContent="Cliquez un 1ᵉʳ point sur l'image.";
+    $("#calibDistWrap").style.display="none";
+    $("#calibbar").classList.add("on");
+    render(); renderCalib();
+  }
+  function endCalib(){
+    calibMode=false; calibPts=[]; vp.classList.remove("adding");
+    $("#calibbar").classList.remove("on"); renderCalib();
+  }
+  function addCalibPoint(cx,cy){
+    if(calibPts.length>=2) return;
+    calibPts.push(clientToPct(cx,cy));
+    renderCalib();
+    if(calibPts.length===2){
+      $("#calibInfo").textContent="Distance réelle entre ces 2 points :";
+      $("#calibDistWrap").style.display="inline-flex";
+      const di=$("#calibDist"); di.value=(state.scale&&state.scale.meters)?state.scale.meters:""; di.focus();
+    } else { $("#calibInfo").textContent="Cliquez le 2ᵉ point."; }
+  }
+  function applyCalibration(){
+    if(calibPts.length<2) return;
+    const meters=parseFloat(String($("#calibDist").value).replace(",","."));
+    if(!(meters>0)){ $("#calibDist").focus(); return; }
+    const a=calibPts[0], b=calibPts[1];
+    const pixDist=Math.hypot((b.x-a.x)/100*imgNatW,(b.y-a.y)/100*imgNatH);
+    if(pixDist<1){ alert("Les deux points sont trop proches, recommencez."); return; }
+    state.scale={ mPerPx:meters/pixDist, p1:a, p2:b, meters:meters };
+    endCalib();
+    render(); updateScaleBar(); scheduleSave();
+  }
+  $("#btnScale").onclick=startCalibration;
+  $("#calibOk").onclick=applyCalibration;
+  $("#calibCancel").onclick=endCalib;
+
+  /* ---------- Barre d'échelle ---------- */
+  function niceNumber(x){
+    const steps=[0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000,2000,5000];
+    for(let i=steps.length-1;i>=0;i--){ if(steps[i]<=x) return steps[i]; }
+    return steps[0];
+  }
+  function updateScaleBar(){
+    const sb=$("#scaleBar"); if(!sb) return;
+    if(!isCal()){ sb.style.display="none"; return; }
+    const pxPerM=scale/state.scale.mPerPx; // pixels écran par mètre
+    if(!isFinite(pxPerM)||pxPerM<=0){ sb.style.display="none"; return; }
+    const nice=niceNumber(90/pxPerM);
+    sb.style.display="flex";
+    $("#scaleBarBar").style.width=(nice*pxPerM).toFixed(1)+"px";
+    $("#scaleBarLabel").textContent = nice>=1000 ? (nice/1000)+" km" : (nice+" m");
+  }
 
   /* ---------- Partage ---------- */
   $("#btnShare").onclick=async()=>{
@@ -800,6 +928,7 @@
     state.client=d.name||""; state.planDate=d.plan_date||"";
     state.plants=Array.isArray(d.plants)?d.plants:[];
     state.zones=Array.isArray(d.zones)?d.zones:[];
+    state.scale=(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0) ? d.scale : null;
     state.imageUrl=d.image_path ? "/uploads/"+d.image_path : null;
     nextNum=(state.plants.reduce((m,p)=>Math.max(m,p.num||0),0))+1;
     nextZoneNum=(state.zones.reduce((m,z)=>Math.max(m,z.num||0),0))+1;

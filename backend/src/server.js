@@ -130,15 +130,17 @@ app.patch("/api/projects/:id", async (req, res) => {
   const planDate = b.plan_date === undefined ? null : String(b.plan_date).slice(0, 40);
   const plants = b.plants === undefined ? null : JSON.stringify(b.plants);
   const zones = b.zones === undefined ? null : JSON.stringify(b.zones);
+  const scale = b.scale === undefined ? null : JSON.stringify(b.scale);
   const { rowCount } = await pool.query(
     `UPDATE projects SET
         name      = COALESCE($2, name),
         plan_date = COALESCE($3, plan_date),
         plants    = COALESCE($4::jsonb, plants),
         zones     = COALESCE($5::jsonb, zones),
+        scale     = COALESCE($6::jsonb, scale),
         updated_at = now()
       WHERE id = $1`,
-    [req.params.id, name, planDate, plants, zones]
+    [req.params.id, name, planDate, plants, zones, scale]
   );
   if (!rowCount) return res.status(404).json({ error: "projet introuvable" });
   res.json({ ok: true });
