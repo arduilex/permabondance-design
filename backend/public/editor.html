@@ -15,7 +15,8 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
-  body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body{display:flex;flex-direction:column;height:100vh;overflow:hidden;user-select:none;-webkit-user-select:none}
+  input,textarea{user-select:text;-webkit-user-select:text}
 
   header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--accent);color:#fff;flex:none;box-shadow:var(--shadow);z-index:20}
   header .brand{font-weight:700;font-size:18px;letter-spacing:.3px;white-space:nowrap;color:#fff;text-decoration:none}
@@ -806,6 +807,13 @@
       else if(e.key==="Enter" && calibPts.length>=2){ e.preventDefault(); applyCalibration(); }
       return;
     }
+    // Suppr / Retour arrière : supprime la plante sélectionnée (sauf pendant une saisie de texte)
+    if(!addingZone && selId && (e.key==="Delete" || e.key==="Backspace")){
+      const t=e.target, tag=(t&&t.tagName||"").toLowerCase();
+      if(tag!=="input" && tag!=="textarea" && tag!=="select" && !(t&&t.isContentEditable)){
+        e.preventDefault(); deleteSelectedPlant(); return;
+      }
+    }
     if(!addingZone)return;
     if(e.key==="Enter"){ e.preventDefault(); finishZone(); }
     else if(e.key==="Escape"){ e.preventDefault(); cancelZone(); }
@@ -856,12 +864,13 @@
     scheduleSave();
   });
 
-  $("#btnDel").onclick=()=>{
+  function deleteSelectedPlant(){
     const p=state.plants.find(x=>x.id===selId); if(!p)return;
     if(!confirm("Supprimer cette plante du plan ?"))return;
     state.plants=state.plants.filter(x=>x.id!==selId);
     selId=null; switchTab("list"); render(); scheduleSave();
-  };
+  }
+  $("#btnDel").onclick=deleteSelectedPlant;
 
   $("#btnDup").onclick=()=>{
     const p=state.plants.find(x=>x.id===selId); if(!p)return;
