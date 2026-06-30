@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Permabondance — Projets clients</title>
+<style>
+  :root{
+    --bg:#f4f1ea; --panel:#ffffff; --ink:#2c3329; --muted:#6b7464;
+    --accent:#4f7a3a; --accent-dark:#3a5c2b; --line:#e0dccf; --shadow:0 2px 12px rgba(0,0,0,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var(--accent);color:#fff;box-shadow:var(--shadow)}
+  header .brand{font-weight:700;font-size:19px;letter-spacing:.3px}
+  header .brand small{display:block;font-weight:400;font-size:11px;opacity:.85}
+  header .spacer{flex:1}
+  .btn{border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:var(--accent-dark);transition:.15s}
+  .btn:hover{background:#eef3e9}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)}
+  .btn.ghost:hover{background:rgba(255,255,255,.28)}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-dark)}
+  .btn.del{background:#fbeaea;color:#b13a3a}
+  .btn.del:hover{background:#f6dada}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 22px}
+
+  /* Login */
+  .login{max-width:380px;margin:8vh auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;box-shadow:var(--shadow)}
+  .login h1{font-size:18px;margin:0 0 4px}
+  .login p{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px}
+  .field input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--ink);background:#fff}
+  .field input:focus{outline:none;border-color:var(--accent)}
+  .err{color:#b13a3a;font-size:13px;margin:6px 0 0;min-height:18px}
+
+  /* Liste */
+  .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .toolbar h2{font-size:20px;margin:0}
+  .toolbar .count{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .card .thumb{height:140px;background-size:cover;background-position:center;background-color:#dfe3d6;display:flex;align-items:center;justify-content:center;color:#a7b09a;font-size:13px}
+  .card .body{padding:14px;flex:1;display:flex;flex-direction:column;gap:6px}
+  .card .nm{font-weight:700;font-size:15px;word-break:break-word}
+  .card .meta{font-size:12px;color:var(--muted)}
+  .card .actions{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
+  .card .actions .btn{font-size:12px;padding:7px 10px}
+  .empty{text-align:center;color:var(--muted);padding:60px 20px;line-height:1.6}
+  .hidden{display:none!important}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent-dark);color:#fff;padding:10px 16px;border-radius:9px;font-size:13px;box-shadow:var(--shadow);opacity:0;transition:.25s;pointer-events:none}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN DE CONNEXION -->
+<div id="loginScreen" class="hidden">
+  <div class="login">
+    <h1>Espace Permabondance</h1>
+    <p>Connectez-vous pour gérer les projets clients.</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="user">Identifiant</label>
+        <input id="user" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn primary" type="submit" style="width:100%">Se connecter</button>
+      <p class="err" id="loginErr"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ÉCRAN PROJETS -->
+<div id="appScreen" class="hidden">
+  <header>
+    <div class="brand">Permabondance<small>Projets clients</small></div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="btnLogout">Déconnexion</button>
+  </header>
+  <div class="wrap">
+    <div class="toolbar">
+      <h2>Projets</h2>
+      <span class="count" id="count"></span>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn primary" id="btnNew">+ Nouveau projet</button>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty hidden">Aucun projet pour le moment.<br>Cliquez sur « Nouveau projet » pour commencer.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const $=s=>document.querySelector(s);
+  const loginScreen=$("#loginScreen"), appScreen=$("#appScreen");
+
+  function show(el){el.classList.remove("hidden");}
+  function hide(el){el.classList.add("hidden");}
+  let toastT=null;
+  function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("on"),2200); }
+
+  async function api(url,opts){ return fetch(url,Object.assign({headers:{"Content-Type":"application/json"}},opts)); }
+
+  async function checkAuth(){
+    const r=await fetch("/api/me");
+    if(r.ok){ show(appScreen); hide(loginScreen); loadProjects(); }
+    else { show(loginScreen); hide(appScreen); $("#user").focus(); }
+  }
+
+  $("#loginForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    $("#loginErr").textContent="";
+    const r=await api("/api/login",{method:"POST",body:JSON.stringify({user:$("#user").value,password:$("#password").value})});
+    if(r.ok){ $("#password").value=""; checkAuth(); }
+    else { const d=await r.json().catch(()=>({})); $("#loginErr").textContent=d.error||"Connexion impossible."; }
+  });
+
+  $("#btnLogout").onclick=async()=>{ await api("/api/logout",{method:"POST"}); checkAuth(); };
+
+  function fmtDate(s){ try{ return new Date(s).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}); }catch(_){ return ""; } }
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+  async function loadProjects(){
+    const r=await fetch("/api/projects");
+    if(r.status===401){ checkAuth(); return; }
+    const list=await r.json();
+    const grid=$("#grid"); grid.innerHTML="";
+    $("#count").textContent=list.length?`${list.length} projet(s)`:"";
+    $("#empty").classList.toggle("hidden",list.length>0);
+    list.forEach(p=>{
+      const card=document.createElement("div"); card.className="card";
+      const thumb=p.image_path
+        ? `<div class="thumb" style="background-image:url('/uploads/${esc(p.image_path)}')"></div>`
+        : `<div class="thumb">Pas encore d'image</div>`;
+      card.innerHTML=`${thumb}
+        <div class="body">
+          <div class="nm">${esc(p.name||"Sans titre")}</div>
+          <div class="meta">${p.n_plants||0} plante(s) · ${p.n_zones||0} zone(s)</div>
+          <div class="meta">Modifié le ${fmtDate(p.updated_at)}</div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-open="${esc(p.id)}">Ouvrir</button>
+          <button class="btn" data-share="${esc(p.id)}">Copier le lien</button>
+          <button class="btn del" data-del="${esc(p.id)}" data-name="${esc(p.name||"")}">Supprimer</button>
+        </div>`;
+      grid.appendChild(card);
+    });
+  }
+
+  $("#grid").addEventListener("click",async e=>{
+    const o=e.target.closest("[data-open]"); const s=e.target.closest("[data-share]"); const d=e.target.closest("[data-del]");
+    if(o){ location.href="/p/"+o.getAttribute("data-open"); return; }
+    if(s){ const url=location.origin+"/p/"+s.getAttribute("data-share");
+      try{ await navigator.clipboard.writeText(url); toast("Lien copié : "+url); }
+      catch(_){ prompt("Lien du projet :",url); } return; }
+    if(d){ const id=d.getAttribute("data-del"); const nm=d.getAttribute("data-name")||"ce projet";
+      if(!confirm(`Supprimer définitivement « ${nm} » ? Cette action est irréversible.`))return;
+      const r=await api("/api/projects/"+id,{method:"DELETE"});
+      if(r.ok){ toast("Projet supprimé."); loadProjects(); } else { toast("Suppression impossible."); }
+    }
+  });
+
+  $("#btnNew").onclick=async()=>{
+    const name=prompt("Nom du nouveau projet (client / terrain) :","");
+    if(name===null)return;
+    const r=await api("/api/projects",{method:"POST",body:JSON.stringify({name:name.trim()})});
+    if(r.status===401){ checkAuth(); return; }
+    const d=await r.json();
+    location.href="/p/"+d.id;
+  };
+
+  checkAuth();
+})();
+</script>
+</body>
+</html>

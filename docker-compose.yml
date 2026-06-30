@@ -1,0 +1,55 @@
+services:
+  design-db:
+    image: postgres:16-alpine
+    container_name: design-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: design
+      POSTGRES_USER: design
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - design-db-data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U design -d design"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  design-app:
+    build: ./backend
+    container_name: design-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://design:${POSTGRES_PASSWORD}@design-db:5432/design
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      SESSION_SECRET: ${SESSION_SECRET}
+      UPLOAD_DIR: /data/uploads
+      NODE_ENV: production
+    volumes:
+      - design-uploads:/data/uploads
+    depends_on:
+      design-db:
+        condition: service_healthy
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.design.rule=Host(`design.pepinieres-permabondance.fr`)"
+      - "traefik.http.routers.design.entrypoints=websecure"
+      - "traefik.http.routers.design.tls.certresolver=le"
+      - "traefik.http.services.design.loadbalancer.server.port=3000"
+
+volumes:
+  design-db-data:
+  design-uploads:
+
+networks:
+  web:
+    external: true
+  internal:
+    external: false
