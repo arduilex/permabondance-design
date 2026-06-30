@@ -209,6 +209,7 @@ app.use("/static", express.static(PUBLIC_DIR, { index: false }));
 
 /* ---------------- Pages ---------------- */
 app.get("/healthz", (req, res) => res.json({ ok: true }));
+app.get("/favicon.ico", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "favicon.ico")));
 app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 app.get("/p/:id", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "editor.html")));
 
