@@ -67,13 +67,18 @@
   #zoneLayer .vtx{fill:#fff;stroke:#3a5c2b;stroke-width:2}
   #zoneLayer .vtx.first{fill:#ffd34d}
   #zoneLayer .draftline{fill:rgba(79,122,58,.18);stroke:#3a5c2b;stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
-  #zoneLayer .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;cursor:grab;pointer-events:auto}
+  #zoneLayer .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;cursor:crosshair;pointer-events:auto}
   #zoneLayer .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;cursor:copy;pointer-events:auto}
   #zoneLayer .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;cursor:grab;pointer-events:auto}
   #zoneLayer .zmove-ic{stroke:#fff;stroke-width:2;fill:none;pointer-events:none}
   /* Poignées/points de zonage : taille constante à l'écran quel que soit le zoom */
   #zoneLayer .vhandle,#zoneLayer .mhandle,#zoneLayer .zmove,#zoneLayer .zmove-ic,#zoneLayer .vtx{transform:scale(var(--inv,1));transform-box:fill-box;transform-origin:center}
   .zhelp{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .zhelp .stat{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px}
+  .zhelp .stat span{color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;font-size:10px}
+  .zhelp .stat b{color:var(--ink);font-size:13px}
+  .zhelp .stat + .stat{border-top:1px solid var(--line)}
+  .zhelp .stat-note{color:var(--muted)}
   .drawbar{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:8px 12px;border-radius:10px;display:none;align-items:center;gap:10px;z-index:8;font-size:13px;box-shadow:var(--shadow)}
   .drawbar.on{display:flex}
   .drawbar button{border:none;border-radius:7px;padding:6px 11px;font-size:13px;font-weight:600;cursor:pointer}
@@ -121,6 +126,14 @@
   .plant-row .nm{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .plant-row .vr{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .plant-row .num{font-size:11px;color:var(--muted);font-weight:700}
+  /* En-têtes de groupes (liste plantes rangée par zone) */
+  .grp-head{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:6px;background:#eef3e9;border-radius:8px;cursor:pointer;user-select:none;font-weight:700;font-size:13px;color:var(--accent-dark)}
+  .grp-head:hover{background:#e4ecdb}
+  .grp-head .chev{display:inline-block;font-size:11px;transition:transform .15s;transform:rotate(90deg)}
+  .grp-head.collapsed .chev{transform:rotate(0deg)}
+  .grp-head .gsw{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);flex:none}
+  .grp-head .gname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grp-head .gcount{font-size:11px;color:var(--muted);font-weight:700;background:#fff;border-radius:10px;padding:1px 8px}
 
   .field{margin-bottom:12px}
   .field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
@@ -262,7 +275,7 @@
           <div class="ttl">Zone sélectionnée</div>
           <button class="btn del" id="btnZoneDel">Supprimer</button>
         </div>
-        <div class="zhelp">Modifier la forme : glissez les points blancs pour déformer · les points pointillés (milieu des côtés) pour ajouter un point · double-cliquez un point blanc pour le supprimer · la poignée centrale pour déplacer toute la zone.</div>
+        <div class="zhelp" id="zoneStats"></div>
         <div class="field"><label>Catégorie</label>
           <input id="zCat" list="zoneCats" placeholder="ex. Potager, Verger, Pelouse…">
           <datalist id="zoneCats">
@@ -298,6 +311,7 @@
   let selId=null, adding=false, nextNum=1;
   let selZone=null, nextZoneNum=1, addingZone=false, draft=[], draftCursor=null, currentTab="list";
   let calibMode=false, calibPts=[], pendingCalib=false;
+  let collapsedGroups={}; // état plié/déplié des groupes de la liste « Plantes » (par zone)
   const DEFAULT_M=4; // diamètre de plante par défaut, en mètres, quand l'échelle est connue
   function isCal(){ return !!(state.scale && state.scale.mPerPx>0); }
 
@@ -530,25 +544,74 @@
     });
   }
 
+  function plantRow(p){
+    const row=document.createElement("div");
+    row.className="plant-row"+(p.id===selId?" sel":"");
+    const sub=p.variete||(p.type==="Autre"?p.typeAutre:p.type)||"—";
+    row.innerHTML=`<span class="dot" style="background:${p.color}"></span>
+      <div class="info"><div class="nm">${esc(p.nom||("Plante "+p.num))}</div>
+      <div class="vr">${esc(sub)}</div></div><span class="num">#${p.num}</span>`;
+    row.onclick=()=>select(p.id);
+    return row;
+  }
   function renderList(){
     const list=$("#plantList"); list.innerHTML="";
-    state.plants.slice().sort((a,b)=>a.num-b.num).forEach(p=>{
-      const row=document.createElement("div");
-      row.className="plant-row"+(p.id===selId?" sel":"");
-      const sub=p.variete||(p.type==="Autre"?p.typeAutre:p.type)||"—";
-      row.innerHTML=`<span class="dot" style="background:${p.color}"></span>
-        <div class="info"><div class="nm">${esc(p.nom||("Plante "+p.num))}</div>
-        <div class="vr">${esc(sub)}</div></div><span class="num">#${p.num}</span>`;
-      row.onclick=()=>select(p.id);
-      list.appendChild(row);
-    });
-    $("#count").textContent=state.plants.length?state.plants.length+" plante(s) sur le plan.":"Aucune plante.";
+    const total=state.plants.length;
+    const hasZones=state.zones.some(z=>z.points && z.points.length>=3);
+
+    if(!hasZones){
+      state.plants.slice().sort((a,b)=>a.num-b.num).forEach(p=>list.appendChild(plantRow(p)));
+    } else {
+      // Regroupement par zone (ordre de numéro), « Sans zone » à la fin
+      const groups=[]; const map={};
+      function grp(key,name,color){ if(!map[key]){ map[key]={key,name,color,plants:[]}; groups.push(map[key]); } return map[key]; }
+      state.zones.slice().sort((a,b)=>a.num-b.num).forEach(z=>{ if(z.points && z.points.length>=3) grp("z_"+z.id, z.cat||("Zone "+z.num), z.color); });
+      state.plants.slice().sort((a,b)=>a.num-b.num).forEach(p=>{
+        const z=zoneOfPlant(p);
+        const g = z ? grp("z_"+z.id, z.cat||("Zone "+z.num), z.color) : grp("none","Sans zone","#8a8a8a");
+        g.plants.push(p);
+      });
+      groups.filter(g=>g.plants.length>0).forEach(g=>{
+        const collapsed=!!collapsedGroups[g.key];
+        const head=document.createElement("div");
+        head.className="grp-head"+(collapsed?" collapsed":"");
+        head.innerHTML=`<span class="chev">▸</span><span class="gsw" style="background:${g.color}"></span><span class="gname">${esc(g.name)}</span><span class="gcount">${g.plants.length}</span>`;
+        head.onclick=()=>{ collapsedGroups[g.key]=!collapsedGroups[g.key]; renderList(); };
+        list.appendChild(head);
+        if(!collapsed) g.plants.forEach(p=>list.appendChild(plantRow(p)));
+      });
+    }
+    $("#count").textContent=total?total+" plante(s) sur le plan.":"Aucune plante.";
   }
 
   /* ---------- Zones ---------- */
   function sizeZoneLayer(){ if(!imgNatW)return; [zoneLayer,$("#calibLayer")].forEach(s=>{ if(!s)return; s.setAttribute("width",imgNatW); s.setAttribute("height",imgNatH); s.setAttribute("viewBox","0 0 "+imgNatW+" "+imgNatH); }); }
   function centroid(pts){ let x=0,y=0; pts.forEach(p=>{x+=p.x;y+=p.y;}); return {x:x/pts.length,y:y/pts.length}; }
   function ptsStr(pts){ return pts.map(p=>(p.x/100*imgNatW).toFixed(1)+","+(p.y/100*imgNatH).toFixed(1)).join(" "); }
+  // Point dans polygone (coordonnées en % de l'image)
+  function pointInPoly(pt,pts){
+    let inside=false;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      const xi=pts[i].x, yi=pts[i].y, xj=pts[j].x, yj=pts[j].y;
+      if(((yi>pt.y)!==(yj>pt.y)) && (pt.x < (xj-xi)*(pt.y-yi)/((yj-yi)||1e-9)+xi)) inside=!inside;
+    }
+    return inside;
+  }
+  function zoneOfPlant(p){
+    for(const z of state.zones){ if(z.points && z.points.length>=3 && pointInPoly(p,z.points)) return z; }
+    return null;
+  }
+  // Surface (px²) et périmètre (px) en pixels image
+  function zoneMetrics(z){
+    let a=0, per=0; const n=z.points.length;
+    for(let i=0;i<n;i++){
+      const p=z.points[i], q=z.points[(i+1)%n];
+      const px=p.x/100*imgNatW, py=p.y/100*imgNatH, qx=q.x/100*imgNatW, qy=q.y/100*imgNatH;
+      a += px*qy - qx*py; per += Math.hypot(qx-px,qy-py);
+    }
+    return { areaPx:Math.abs(a)/2, perimPx:per };
+  }
+  function fmtNum(n,dec){ return n.toLocaleString("fr-FR",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 
   function renderZones(){
     if(!imgNatW){ zoneLayer.innerHTML=""; return; }
@@ -706,6 +769,21 @@
     $("#zCat").value=z.cat||"";
     $("#zOpacity").value=Math.round(z.opacity*100);
     $("#zOpacityVal").textContent="Opacité "+Math.round(z.opacity*100)+"%";
+    // Données : surface et périmètre réels (si l'échelle est définie)
+    const stats=$("#zoneStats");
+    if(stats){
+      if(z.points && z.points.length>=3){
+        const m=zoneMetrics(z);
+        if(isCal()){
+          const mpp=state.scale.mPerPx;
+          const aM2=m.areaPx*mpp*mpp, perM=m.perimPx*mpp;
+          const aStr = aM2>=10000 ? fmtNum(aM2/10000,2)+" ha ("+fmtNum(aM2,0)+" m²)" : fmtNum(aM2,1)+" m²";
+          stats.innerHTML=`<div class="stat"><span>Surface</span><b>${aStr}</b></div><div class="stat"><span>Périmètre</span><b>${fmtNum(perM,1)} m</b></div>`;
+        } else {
+          stats.innerHTML=`<div class="stat-note">Définissez l'échelle (bouton « Échelle ») pour afficher la surface et le périmètre.</div>`;
+        }
+      } else stats.innerHTML="";
+    }
     const cp=$("#zColorPick"); cp.innerHTML="";
     COLORS.forEach(c=>{
       const lab=document.createElement("label");
