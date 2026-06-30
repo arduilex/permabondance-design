@@ -206,7 +206,7 @@
         </div>
         <div class="field" id="autreField" style="display:none"><label>Préciser le type</label><input data-f="typeAutre" placeholder="Précisez le type…"></div>
         <div class="field"><label>Taille sur le plan</label>
-          <input type="range" data-f="diam" id="sizeRange" min="10" max="400" step="1">
+          <input type="range" data-f="diam" id="sizeRange" min="5" max="400" step="1">
           <div class="rangeval" id="sizeVal"></div>
         </div>
         <div class="field"><label>Couleur du repère</label>
@@ -386,7 +386,7 @@
   }
 
   function defaultDiam(){ return Math.max(24, Math.round((imgNatW||800)*0.05)); }
-  function diamRange(){ const w=imgNatW||800; return {min:Math.max(8,Math.round(w*0.008)), max:Math.max(60,Math.round(w*0.4))}; }
+  function diamRange(){ return {min:5, max:400}; }
 
   function shade(hex,p){
     hex=(hex||"#4f7a3a").replace("#","");
