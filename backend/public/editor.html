@@ -566,7 +566,7 @@
   function buildZoneEditors(){
     const z=state.zones.find(x=>x.id===selZone); if(!z)return;
     const g=$("#editGroup"); if(!g)return;
-    const R=7; // rayon en px écran (les poignées sont contre-scalées en CSS)
+    const R=10; // rayon en px écran (les poignées sont contre-scalées en CSS)
     const X=p=>(p.x/100*imgNatW).toFixed(1), Y=p=>(p.y/100*imgNatH).toFixed(1);
     let s="";
     // milieux d'arêtes (pour ajouter un point)
@@ -641,7 +641,7 @@
     const g=$("#draftGroup"); if(!g)return;
     if(!addingZone || !draft.length){ g.innerHTML=""; return; }
     const preview=draftCursor?draft.concat([draftCursor]):draft.slice();
-    const r=5; // px écran (contre-scalé en CSS)
+    const r=7; // px écran (contre-scalé en CSS)
     let s="";
     if(draft.length>=3) s+=`<polygon class="draftline" points="${ptsStr(draft)}"/>`;
     if(preview.length>=2) s+=`<polyline class="draftline" style="fill:none" points="${ptsStr(preview)}"/>`;
