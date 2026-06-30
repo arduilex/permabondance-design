@@ -1,0 +1,21 @@
+# ------------------------------------------------------------------
+# Deployer : surveille la branche main du dépôt et relance
+# "docker compose up -d --build" sur l'app à chaque nouvelle version.
+#
+# Démarrage (une seule fois, sur le VPS) :
+#   cd ~/design-app/auto-deploy
+#   docker compose up -d --build
+# ------------------------------------------------------------------
+services:
+  deployer:
+    build: .
+    container_name: design-deployer
+    restart: unless-stopped
+    environment:
+      REPO_DIR: /repo
+      BRANCH: main
+      INTERVAL: "60"                  # intervalle de vérification en secondes
+      COMPOSE_PROJECT_NAME: design-app # IMPORTANT : cible le même projet que l'app (réutilise ses volumes)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # pour piloter Docker de l'hôte
+      - ../:/repo                                    # le dépôt git (dossier design-app) monté en /repo
