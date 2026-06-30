@@ -63,17 +63,19 @@
 
   /* Zones */
   #zoneLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:1}
+  /* Poignées d'édition de la zone sélectionnée : au-dessus de tout (plantes incluses) */
+  #editLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
   #zoneLayer .zone{pointer-events:auto;cursor:pointer}
   #zoneLayer .zone.sel{stroke-dasharray:7 4}
   #zoneLayer .vtx{fill:#fff;stroke:#3a5c2b;stroke-width:2}
   #zoneLayer .vtx.first{fill:#ffd34d}
   #zoneLayer .draftline{fill:rgba(79,122,58,.18);stroke:#3a5c2b;stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
-  #zoneLayer .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;cursor:crosshair;pointer-events:auto}
-  #zoneLayer .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;cursor:copy;pointer-events:auto}
-  #zoneLayer .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;cursor:grab;pointer-events:auto}
-  #zoneLayer .zmove-ic{stroke:#fff;stroke-width:2;fill:none;pointer-events:none}
+  .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;cursor:crosshair;pointer-events:auto}
+  .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;cursor:copy;pointer-events:auto}
+  .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;cursor:grab;pointer-events:auto}
+  .zmove-ic{stroke:#fff;stroke-width:2;fill:none;pointer-events:none}
   /* Poignées/points de zonage : taille constante à l'écran quel que soit le zoom */
-  #zoneLayer .vhandle,#zoneLayer .mhandle,#zoneLayer .zmove,#zoneLayer .zmove-ic,#zoneLayer .vtx{transform:scale(var(--inv,1));transform-box:fill-box;transform-origin:center}
+  .vhandle,.mhandle,.zmove,.zmove-ic,#zoneLayer .vtx{transform:scale(var(--inv,1));transform-box:fill-box;transform-origin:center}
   .zhelp{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
   .zhelp .stat{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px}
   .zhelp .stat span{color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;font-size:10px}
@@ -184,6 +186,7 @@
         <svg id="zoneLayer" xmlns="http://www.w3.org/2000/svg"></svg>
         <svg id="calibLayer" xmlns="http://www.w3.org/2000/svg"></svg>
         <div id="labelLayer"></div>
+        <svg id="editLayer" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
     </div>
 
@@ -586,7 +589,7 @@
   }
 
   /* ---------- Zones ---------- */
-  function sizeZoneLayer(){ if(!imgNatW)return; [zoneLayer,$("#calibLayer")].forEach(s=>{ if(!s)return; s.setAttribute("width",imgNatW); s.setAttribute("height",imgNatH); s.setAttribute("viewBox","0 0 "+imgNatW+" "+imgNatH); }); }
+  function sizeZoneLayer(){ if(!imgNatW)return; [zoneLayer,$("#calibLayer"),$("#editLayer")].forEach(s=>{ if(!s)return; s.setAttribute("width",imgNatW); s.setAttribute("height",imgNatH); s.setAttribute("viewBox","0 0 "+imgNatW+" "+imgNatH); }); }
   function centroid(pts){ let x=0,y=0; pts.forEach(p=>{x+=p.x;y+=p.y;}); return {x:x/pts.length,y:y/pts.length}; }
   function ptsStr(pts){ return pts.map(p=>(p.x/100*imgNatW).toFixed(1)+","+(p.y/100*imgNatH).toFixed(1)).join(" "); }
   // Point dans polygone (coordonnées en % de l'image)
@@ -615,21 +618,25 @@
   function fmtNum(n,dec){ return n.toLocaleString("fr-FR",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 
   function renderZones(){
-    if(!imgNatW){ zoneLayer.innerHTML=""; return; }
+    const el=$("#editLayer");
+    if(!imgNatW){ zoneLayer.innerHTML=""; if(el) el.innerHTML=""; return; }
     let svg="";
-    state.zones.forEach(z=>{
+    // la zone sélectionnée est dessinée en dernier => au premier plan des autres zones
+    const ordered=state.zones.slice().sort((a,b)=>(a.id===selZone?1:0)-(b.id===selZone?1:0));
+    ordered.forEach(z=>{
       const sel=z.id===selZone?" sel":"";
       svg+=`<polygon class="zone${sel}" data-id="${z.id}" points="${ptsStr(z.points)}" fill="${z.color}" fill-opacity="${z.opacity}" stroke="${shade(z.color,-0.35)}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
     });
-    svg+=`<g id="draftGroup"></g><g id="editGroup"></g>`;
+    svg+=`<g id="draftGroup"></g>`;
     zoneLayer.innerHTML=svg;
     renderDraft();
     if(selZone && !addingZone && currentTab==="zone") buildZoneEditors();
+    else if(el) el.innerHTML="";
   }
 
   function buildZoneEditors(){
     const z=state.zones.find(x=>x.id===selZone); if(!z)return;
-    const g=$("#editGroup"); if(!g)return;
+    const g=$("#editLayer"); if(!g)return;
     const R=10; // rayon en px écran (les poignées sont contre-scalées en CSS)
     const X=p=>(p.x/100*imgNatW).toFixed(1), Y=p=>(p.y/100*imgNatH).toFixed(1);
     let s="";
@@ -676,14 +683,14 @@
     const p=clientToPct(e.clientX,e.clientY);
     z.points.splice(i+1,0,{x:p.x,y:p.y});
     render();
-    const nh=$("#editGroup").querySelector('.vhandle[data-i="'+(i+1)+'"]');
+    const nh=$("#editLayer").querySelector('.vhandle[data-i="'+(i+1)+'"]');
     const poly=zoneLayer.querySelector('polygon.zone[data-id="'+z.id+'"]');
     if(nh) startVertexDrag(e,z,i+1,nh,poly);
   }
 
   function startZoneMove(e,z){
     e.preventDefault(); e.stopPropagation(); downZone=null; downMarker=null;
-    const handle=$("#editGroup").querySelector(".zmove");
+    const handle=$("#editLayer").querySelector(".zmove");
     try{handle.setPointerCapture(e.pointerId);}catch(_){}
     const start=clientToPct(e.clientX,e.clientY);
     const orig=z.points.map(p=>({x:p.x,y:p.y}));
