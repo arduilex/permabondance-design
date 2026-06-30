@@ -64,13 +64,13 @@
   #zoneLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:1}
   #zoneLayer .zone{pointer-events:auto;cursor:pointer}
   #zoneLayer .zone.sel{stroke-dasharray:7 4}
-  #zoneLayer .vtx{fill:#fff;stroke:#3a5c2b;stroke-width:2;vector-effect:non-scaling-stroke}
+  #zoneLayer .vtx{fill:#fff;stroke:#3a5c2b;stroke-width:2}
   #zoneLayer .vtx.first{fill:#ffd34d}
   #zoneLayer .draftline{fill:rgba(79,122,58,.18);stroke:#3a5c2b;stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
-  #zoneLayer .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;vector-effect:non-scaling-stroke;cursor:grab;pointer-events:auto}
-  #zoneLayer .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;vector-effect:non-scaling-stroke;cursor:copy;pointer-events:auto}
-  #zoneLayer .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;vector-effect:non-scaling-stroke;cursor:grab;pointer-events:auto}
-  #zoneLayer .zmove-ic{stroke:#fff;stroke-width:2;fill:none;vector-effect:non-scaling-stroke;pointer-events:none}
+  #zoneLayer .vhandle{fill:#fff;stroke:#3a5c2b;stroke-width:2;cursor:grab;pointer-events:auto}
+  #zoneLayer .mhandle{fill:rgba(255,255,255,.55);stroke:#3a5c2b;stroke-width:1.5;stroke-dasharray:2 2;cursor:copy;pointer-events:auto}
+  #zoneLayer .zmove{fill:#3a5c2b;stroke:#fff;stroke-width:2.5;cursor:grab;pointer-events:auto}
+  #zoneLayer .zmove-ic{stroke:#fff;stroke-width:2;fill:none;pointer-events:none}
   /* Poignées/points de zonage : taille constante à l'écran quel que soit le zoom */
   #zoneLayer .vhandle,#zoneLayer .mhandle,#zoneLayer .zmove,#zoneLayer .zmove-ic,#zoneLayer .vtx{transform:scale(var(--inv,1));transform-box:fill-box;transform-origin:center}
   .zhelp{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
