@@ -192,7 +192,10 @@
       <div id="detailForm" style="display:none">
         <div class="detail-head">
           <div class="ttl">Fiche de la plante</div>
-          <button class="btn del" id="btnDel">Supprimer</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btnDup">Dupliquer</button>
+            <button class="btn del" id="btnDel">Supprimer</button>
+          </div>
         </div>
         <div class="field"><label>Nom commun</label><input data-f="nom" placeholder="ex. Pommier"></div>
         <div class="field"><label>Variété</label><input data-f="variete" placeholder="ex. Reine des Reinettes"></div>
@@ -690,6 +693,21 @@
     if(!confirm("Supprimer cette plante du plan ?"))return;
     state.plants=state.plants.filter(x=>x.id!==selId);
     selId=null; switchTab("list"); render(); scheduleSave();
+  };
+
+  $("#btnDup").onclick=()=>{
+    const p=state.plants.find(x=>x.id===selId); if(!p)return;
+    const dm=p.diam||defaultDiam();
+    // décalage d'environ 0,7 × diamètre vers le bas-droite, en % de l'image
+    const offX=imgNatW?(dm/imgNatW*100)*0.7:2;
+    const offY=imgNatH?(dm/imgNatH*100)*0.7:2;
+    const copy=Object.assign({},p);
+    copy.id=Date.now()+"_"+Math.random().toString(36).slice(2,6);
+    copy.num=nextNum++;
+    copy.x=Math.max(0,Math.min(100,p.x+offX));
+    copy.y=Math.max(0,Math.min(100,p.y+offY));
+    state.plants.push(copy);
+    select(copy.id); render(); scheduleSave();
   };
 
   /* ---------- Tabs ---------- */
