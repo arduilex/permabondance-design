@@ -351,10 +351,17 @@
     tx=(r.width-imgNatW*scale)/2; ty=(r.height-imgNatH*scale)/2;
     applyTransform();
   }
+  // Zoom maximum : profond pour tous les projets ; si calibré, permet d'atteindre ~0,1 m
+  // sur la barre d'échelle (une image basse définition demande un zoom plus fort pour le même détail réel).
+  function maxScale(){
+    let m=40;
+    if(isCal()) m=Math.max(m, 1200*state.scale.mPerPx);
+    return Math.min(m, 8000);
+  }
   function zoomAt(cx,cy,factor){
     const r=vp.getBoundingClientRect();
     const px=cx-r.left, py=cy-r.top;
-    const ns=Math.min(Math.max(scale*factor,0.05),12);
+    const ns=Math.min(Math.max(scale*factor,0.05),maxScale());
     tx=px-(px-tx)*(ns/scale); ty=py-(py-ty)*(ns/scale);
     scale=ns; applyTransform();
   }
