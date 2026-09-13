@@ -33,3 +33,4 @@ prod-uploads/
 .deployignore
 CLAUDE.md
 TODO.md
+auto-deploy/
