@@ -58,13 +58,16 @@ cp .env.example .env
 
 Génère les secrets et le hash du mot de passe admin :
 ```bash
-openssl rand -base64 24      # -> POSTGRES_PASSWORD
+openssl rand -hex 24         # -> POSTGRES_PASSWORD (hex : pas de caractère qui casse l'URL de connexion)
 openssl rand -hex 32         # -> SESSION_SECRET
 
 # build de l'image puis génération du hash bcrypt :
 docker compose build
-docker compose run --rm design-app node scripts/hash-password.js 'TonMotDePasseAdmin'
-# -> colle la ligne $2a$... dans ADMIN_PASSWORD_HASH
+docker compose run --rm --no-deps design-app node scripts/hash-password.js 'TonMotDePasseAdmin'
+# -> colle la ligne $2a$... dans ADMIN_PASSWORD_HASH, ENTRE GUILLEMETS SIMPLES :
+#    ADMIN_PASSWORD_HASH='$2a$12$....'
+#    (sans les guillemets, Docker Compose prend les « $ » du hash pour des variables et le tronque :
+#     WARN "The "xxx" variable is not set" au démarrage, et connexion impossible)
 ```
 
 Édite `.env` : `POSTGRES_PASSWORD`, `ADMIN_USER`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`.
@@ -134,6 +137,16 @@ cat backup.sql | docker compose exec -T design-db psql -U design design
 
 Les images sont dans le volume Docker `design-app_design-uploads`.
 Pour une sauvegarde complète, sauvegarde **le dump SQL + ce volume**.
+
+`POSTGRES_PASSWORD` n'est appliqué qu'à la création du volume Postgres. Si `.env` change ensuite
+(« password authentication failed for user "design" » au démarrage), aligne la base sur `.env`
+sans perdre de données :
+```bash
+docker compose exec design-db psql -U design -d design \
+  -c "ALTER USER design WITH PASSWORD '$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)';"
+docker compose up -d
+```
+Pour repartir de zéro (efface base et images) : `docker compose down -v --rmi all && docker compose up -d --build`.
 
 ---
 
