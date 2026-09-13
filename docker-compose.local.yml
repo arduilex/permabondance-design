@@ -1,0 +1,65 @@
+# ------------------------------------------------------------------
+# Stack LOCALE (test sur ton Mac) : app + Postgres, sans Traefik.
+#
+#   docker compose -f docker-compose.local.yml up -d --build
+#   → http://localhost:3000   (login : admin / admin)
+#
+#   docker compose -f docker-compose.local.yml logs -f design-app
+#   docker compose -f docker-compose.local.yml down        # stop (données conservées)
+#   docker compose -f docker-compose.local.yml down -v     # stop + efface base et images
+#
+# - Nom de projet et volumes distincts de la prod : ne touche jamais aux
+#   volumes « design-app_* » du VPS même si les deux fichiers coexistent.
+# - backend/public et backend/src sont montés depuis le Mac : une modif
+#   dans public/ (HTML) est visible au simple rechargement de la page ;
+#   une modif dans src/ demande `restart design-app`.
+# - Aucun .env nécessaire : valeurs par défaut ci-dessous (surchargables
+#   par variable d'environnement ou par un .env local).
+# ------------------------------------------------------------------
+name: design-app-local
+
+services:
+  design-db:
+    image: postgres:16-alpine
+    container_name: design-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: design
+      POSTGRES_USER: design
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-design}
+    volumes:
+      - design-db-data-local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U design -d design"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  design-app:
+    build: ./backend
+    container_name: design-app-local
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://design:${POSTGRES_PASSWORD:-design}@design-db:5432/design
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      # Hash bcrypt du mot de passe « admin » (les « $ » sont doublés pour Compose).
+      # Pour en générer un autre :
+      #   docker compose -f docker-compose.local.yml run --rm design-app node scripts/hash-password.js 'MotDePasse'
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-$$2a$$12$$KOm0K9lt3lB7.6WVdzIgwuGmXucKJml8iULKHpiMin466gRZzifXe}
+      SESSION_SECRET: ${SESSION_SECRET:-secret-de-dev-local-ne-pas-utiliser-en-prod}
+      UPLOAD_DIR: /data/uploads
+      # development : cookie de session sans l'attribut Secure (login possible en http://localhost)
+      NODE_ENV: development
+    volumes:
+      - design-uploads-local:/data/uploads
+      - ./backend/public:/app/public:ro
+      - ./backend/src:/app/src:ro
+    depends_on:
+      design-db:
+        condition: service_healthy
+
+volumes:
+  design-db-data-local:
+  design-uploads-local:

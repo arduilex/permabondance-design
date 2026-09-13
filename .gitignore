@@ -20,3 +20,6 @@ uploads/
 # Divers
 *.log
 .DS_Store
+
+# Exports de projets (données clients, image incluse)
+*.permab.json
