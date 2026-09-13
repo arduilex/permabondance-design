@@ -28,3 +28,8 @@ uploads/
 *.sql
 *.tgz
 prod-uploads/
+
+# Fichiers locaux de travail (non versionnés)
+.deployignore
+CLAUDE.md
+TODO.md

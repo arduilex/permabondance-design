@@ -98,12 +98,20 @@
     <!-- Aide contextuelle de l'outil actif -->
     <div class="tag" id="tag" role="status" aria-live="polite"><div class="tag-in" id="tagIn"></div></div>
 
-    <div class="empty" id="emptyState">
+    <div class="empty" id="emptyState" hidden>
       <div class="card">
         <svg class="ic"><use href="#i-image"/></svg>
-        <h2>Commencez par une image du terrain</h2>
+        <h2 id="emptyTitle">Commencez par une image du terrain</h2>
         <p id="emptyText">Importez une photo satellite ou un plan. Vous pourrez ensuite définir l'échelle, poser les plantes et dessiner les zones.</p>
         <button class="btn primary" id="btnLoad2">Importer une image</button>
+      </div>
+    </div>
+    <!-- Image présente mais pas encore reçue : progression du téléchargement -->
+    <div class="empty" id="imgLoading" hidden>
+      <div class="card">
+        <h2>Chargement de l'image du terrain…</h2>
+        <div class="progress"><i id="imgLoadBar"></i></div>
+        <p id="imgLoadPct" class="pct">Connexion…</p>
       </div>
     </div>
 
