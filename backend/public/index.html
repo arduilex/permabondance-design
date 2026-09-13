@@ -27,6 +27,7 @@
   .btn.primary:hover{background:var(--accent-dark)}
   .btn.del{background:#fbeaea;color:#b13a3a}
   .btn.del:hover{background:#f6dada}
+  .btn.confirming,.btn.confirming:hover{background:#b13a3a;color:#fff}
   .wrap{max-width:920px;margin:0 auto;padding:28px 22px}
 
   /* Login */
@@ -152,7 +153,8 @@
         </div>
         <div class="actions">
           <button class="btn primary" data-open="${esc(p.id)}">Ouvrir</button>
-          <button class="btn" data-share="${esc(p.id)}">Copier le lien</button>
+          <button class="btn" data-share="${esc(p.id)}" title="Lien d'édition : quiconque l'a peut modifier le plan">Lien édition</button>
+          <button class="btn" data-view="${esc(p.view_token||"")}" title="Lien de lecture seule : consultation et mesures, sans modification">Lien lecture</button>
           <button class="btn del" data-del="${esc(p.id)}" data-name="${esc(p.name||"")}">Supprimer</button>
         </div>`;
       grid.appendChild(card);
@@ -160,17 +162,22 @@
   }
 
   $("#grid").addEventListener("click",async e=>{
-    const o=e.target.closest("[data-open]"); const s=e.target.closest("[data-share]"); const d=e.target.closest("[data-del]");
+    const o=e.target.closest("[data-open]"); const s=e.target.closest("[data-share]"); const v=e.target.closest("[data-view]"); const d=e.target.closest("[data-del]");
     if(o){ location.href="/p/"+o.getAttribute("data-open"); return; }
-    if(s){ const url=location.origin+"/p/"+s.getAttribute("data-share");
-      try{ await navigator.clipboard.writeText(url); toast("Lien copié : "+url); }
-      catch(_){ prompt("Lien du projet :",url); } return; }
-    if(d){ const id=d.getAttribute("data-del"); const nm=d.getAttribute("data-name")||"ce projet";
-      if(!confirm(`Supprimer définitivement « ${nm} » ? Cette action est irréversible.`))return;
-      const r=await api("/api/projects/"+id,{method:"DELETE"});
+    const copy=async(url,label)=>{ try{ await navigator.clipboard.writeText(url); toast(label+" copié : "+url); } catch(_){ prompt(label+" :",url); } };
+    if(s){ await copy(location.origin+"/p/"+s.getAttribute("data-share"),"Lien d'édition"); return; }
+    if(v){ const t=v.getAttribute("data-view"); if(!t){ toast("Lien de lecture indisponible."); return; } await copy(location.origin+"/v/"+t,"Lien de lecture seule"); return; }
+    if(d){
+      // Confirmation sur le bouton lui-même : 1er clic = « Confirmer ? », 2e clic = suppression
+      if(d.dataset.armed!=="1"){ disarm(); d.dataset.armed="1"; d.dataset.label=d.textContent; d.textContent="Confirmer la suppression ?"; d.classList.add("confirming"); d.title="Cliquez à nouveau pour supprimer définitivement · Échap pour annuler"; return; }
+      disarm();
+      const r=await api("/api/projects/"+d.getAttribute("data-del"),{method:"DELETE"});
       if(r.ok){ toast("Projet supprimé."); loadProjects(); } else { toast("Suppression impossible."); }
     }
   });
+  function disarm(){ document.querySelectorAll('[data-del][data-armed="1"]').forEach(b=>{ b.dataset.armed="0"; b.textContent=b.dataset.label||"Supprimer"; b.classList.remove("confirming"); b.title=""; }); }
+  document.addEventListener("pointerdown",e=>{ if(!e.target.closest('[data-del][data-armed="1"]')) disarm(); },true);
+  window.addEventListener("keydown",e=>{ if(e.key==="Escape") disarm(); });
 
   $("#btnNew").onclick=async()=>{
     const name=prompt("Nom du nouveau projet (client / terrain) :","");

@@ -84,9 +84,35 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
 
 1. Connecte-toi (identifiant + mot de passe admin).
 2. **+ Nouveau projet** → donne un nom (client / terrain).
-3. Dans l'éditeur : **Importer une image satellite**, pose tes plantes, dessine tes zones.
-   Tout est **enregistré automatiquement** (indicateur « ✓ Enregistré » en haut).
-4. **Copier le lien** → partage l'URL avec le client (édition complète via ce lien).
+3. Dans l'éditeur : **Importer une image satellite**, puis définir l'**échelle** (outil `E`,
+   deux points + distance réelle) pour travailler en mètres.
+4. Les outils (barre de gauche, un seul actif à la fois, `Échap` = sélection) :
+   Plante `P`, Zone `Z`, Mare `M`, Fossé `F`, Chemin au crayon `C` (route / tracteur / à pied),
+   Item `I` (image PNG importée dans la bibliothèque du projet), Règle `R`, Échelle `E`.
+   Le panneau de droite liste les éléments par catégorie (œil = masquer sur le plan,
+   `+` = outil correspondant) au-dessus de la fiche de l'élément sélectionné.
+   Tout est **enregistré automatiquement** (indicateur « Enregistré » en haut).
+5. **Partager** → deux liens :
+   - **lecture seule** (`/v/<jeton>`) pour les clients : consultation, fiches et règle, sans modification ;
+   - **édition** (`/p/<id>`) : quiconque l'a peut modifier le plan.
+
+## Développement local
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build    # http://localhost:3000, admin / admin
+```
+Pas de Traefik ni de `.env` ; `backend/public` et `backend/src` sont montés depuis le poste
+(HTML/CSS/JS visibles au rechargement, `restart design-app` après une modif de `src/`).
+
+## Importer un projet de l'ancienne version (fichier `.permab.json`)
+
+```bash
+docker compose run --rm -v "$PWD/backend/scripts:/app/scripts:ro" \
+  -v "$PWD/MonProjet.permab.json:/import/MonProjet.permab.json:ro" \
+  design-app node scripts/import-permab.js /import/MonProjet.permab.json
+```
+(ajoute `-f docker-compose.local.yml` après `docker compose` pour la stack locale ; le script
+affiche l'URL `/p/<id>` du projet créé).
 
 ---
 
@@ -116,23 +142,24 @@ Pour une sauvegarde complète, sauvegarde **le dump SQL + ce volume**.
   `httpOnly` + `Secure` + `SameSite=Strict`, rate-limiting sur le login, en-têtes `helmet`.
 - Postgres non exposé publiquement.
 - HTTPS forcé (redirection 80→443 par Traefik).
-- IDs de projet imprévisibles.
-
-À considérer plus tard si besoin : limiter aussi l'accès aux liens de projet
-(actuellement « quiconque a le lien peut éditer », conformément au choix retenu).
+- IDs de projet imprévisibles ; le lien de lecture seule ne permet jamais de retrouver le lien d'édition.
+- Images d'items : PNG / JPEG / WebP uniquement (pas de SVG), 5 Mo max.
 
 ## Structure
 ```
 design-app/
-├── docker-compose.yml          # app + postgres (+ labels Traefik)
+├── docker-compose.yml           # app + postgres (+ labels Traefik) — production
+├── docker-compose.local.yml     # app + postgres sans Traefik — test sur le poste
+├── auto-deploy/                 # deployer (polling git de main sur le VPS)
 ├── .env.example
+├── TODO.md                      # feuille de route des évolutions
 ├── traefik/
 │   ├── docker-compose.yml       # Traefik (HTTPS / Let's Encrypt)
 │   └── .env.example
 └── backend/
     ├── Dockerfile
     ├── package.json
-    ├── scripts/hash-password.js
-    ├── src/{server.js, db.js}
-    └── public/{index.html (admin), editor.html (éditeur)}
+    ├── scripts/{hash-password.js, import-permab.js}
+    ├── src/{server.js, db.js}   # API + migrations de schéma au démarrage
+    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur)}
 ```

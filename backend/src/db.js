@@ -1,4 +1,5 @@
 "use strict";
+const crypto = require("crypto");
 const { Pool } = require("pg");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -33,6 +34,38 @@ async function init() {
   `);
   // Échelle de calibration (m/px + points de référence), ajoutée après coup
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS scale JSONB`);
+  // Nouvelles catégories d'éléments (mares, fossés, chemins, items + bibliothèque d'items du projet)
+  for (const col of ["ponds", "ditches", "paths", "items", "item_types"]) {
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS ${col} JSONB NOT NULL DEFAULT '[]'::jsonb`);
+  }
+  // Jeton de lecture seule (lien client) ; l'id reste le jeton d'édition. Rempli pour les projets existants.
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_token TEXT UNIQUE`);
+  const { rows: noToken } = await pool.query(`SELECT id FROM projects WHERE view_token IS NULL`);
+  for (const r of noToken) {
+    await pool.query(`UPDATE projects SET view_token = $2 WHERE id = $1`, [r.id, crypto.randomBytes(16).toString("base64url")]);
+  }
+  if (noToken.length) console.log(`[db] jetons de lecture seule générés : ${noToken.length} projet(s)`);
+
+  // Fiche plante v2 : « variete » devient la 1re ligne de « description », « libre » est
+  // ajouté à la fin ; les deux clés disparaissent. Rejouable : ne touche que les plantes
+  // qui portent encore l'une de ces clés.
+  const mig = await pool.query(`
+    UPDATE projects SET plants = sub.new_plants
+      FROM (
+        SELECT id, jsonb_agg(
+          CASE WHEN p ? 'variete' OR p ? 'libre' THEN
+            (p - 'variete' - 'libre') || jsonb_build_object('description',
+              COALESCE(concat_ws(E'\\n\\n',
+                NULLIF(concat_ws(E'\\n', NULLIF(btrim(p->>'variete'), ''), NULLIF(btrim(p->>'description'), '')), ''),
+                NULLIF(btrim(p->>'libre'), '')), ''))
+          ELSE p END ORDER BY ord) AS new_plants
+          FROM projects, jsonb_array_elements(plants) WITH ORDINALITY AS t(p, ord)
+         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(projects.plants) q WHERE q ? 'variete' OR q ? 'libre')
+         GROUP BY id
+      ) sub
+     WHERE projects.id = sub.id
+  `);
+  if (mig.rowCount) console.log(`[db] fiches plantes migrées (variete/libre → description) : ${mig.rowCount} projet(s)`);
   console.log("[db] prêt");
 }
 
