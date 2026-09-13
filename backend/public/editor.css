@@ -157,6 +157,9 @@ main{flex:1;display:flex;min-height:0}
 .marker .canopy{width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
 .marker .canopy svg{width:100%;height:100%;display:block}
 .marker.sel .canopy{filter:drop-shadow(0 0 3px var(--pollen)) drop-shadow(0 0 3px var(--pollen)) drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+/* Survol : halo blanc + jaune sur le dessin, passé au-dessus de ses voisins */
+.marker.hover{z-index:4}
+.marker.hover .canopy,.marker.hover .pic{filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px var(--pollen)) drop-shadow(0 2px 3px rgba(0,0,0,.35))}
 /* Items (image importée) */
 .marker.item .pic{width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
 .marker.item .pic img{width:100%;height:100%;display:block;object-fit:contain;-webkit-user-drag:none}
