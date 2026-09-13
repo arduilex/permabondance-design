@@ -1402,16 +1402,45 @@
   /* ==========================================================================
      Image du terrain
      ========================================================================== */
-  function loadImageData(url){
+  // Écran « pas d'image » (normal, ou après un échec de chargement)
+  function showEmpty(errorMsg){
+    $("#imgLoading").hidden=true;
+    $("#emptyTitle").textContent=errorMsg?"L'image du terrain n'a pas pu être chargée":"Commencez par une image du terrain";
+    $("#emptyText").textContent=errorMsg||(READONLY?"Ce plan n'a pas encore d'image de terrain.":"Importez une photo satellite ou un plan. Vous pourrez ensuite définir l'échelle, poser les plantes et dessiner les zones.");
+    $("#btnLoad2").textContent=errorMsg?"Importer une autre image":"Importer une image";
+    $("#emptyState").hidden=false;
+  }
+  function showLoading(frac){
+    $("#emptyState").hidden=true; $("#imgLoading").hidden=false;
+    $("#imgLoadBar").style.width=(frac==null?0:Math.round(frac*100))+"%";
+    $("#imgLoadPct").textContent=frac==null?"Connexion…":Math.round(frac*100)+" %";
+  }
+  // Téléchargement de l'image avec progression (fetch en flux), puis affichage
+  let imgObjectUrl=null;
+  async function loadImageData(url){
+    showLoading(null);
+    let blob;
+    try{
+      const r=await fetch(url,{cache:"force-cache"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const total=+r.headers.get("content-length")||0;
+      if(r.body && total){
+        const reader=r.body.getReader(), chunks=[]; let got=0;
+        for(;;){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); got+=value.length; showLoading(got/total); }
+        blob=new Blob(chunks,{type:r.headers.get("content-type")||"image/jpeg"});
+      } else blob=await r.blob();
+    }catch(_){ showEmpty("Vérifiez la connexion, puis rechargez la page."); return; }
     img.onload=()=>{
       imgNatW=img.naturalWidth; imgNatH=img.naturalHeight;
-      $("#emptyState").hidden=true;
+      $("#emptyState").hidden=true; $("#imgLoading").hidden=true;
       $$(".rail .tool").forEach(b=>{ b.disabled=READONLY && !RO_TOOLS.includes(b.dataset.tool); });
       sizeLayers(); fit(); render(); updateScaleBar();
       if(pendingCalib){ pendingCalib=false; setTool("calib"); }
     };
-    img.onerror=()=>{ $("#emptyState").hidden=false; };
-    img.src=url; state.imageUrl=url;
+    img.onerror=()=>showEmpty("Le fichier reçu n'est pas une image lisible.");
+    if(imgObjectUrl) URL.revokeObjectURL(imgObjectUrl);
+    imgObjectUrl=URL.createObjectURL(blob);
+    img.src=imgObjectUrl; state.imageUrl=url; // imageUrl : adresse serveur (export, rechargement), pas l'URL blob
   }
   $("#fileImg").onchange=async e=>{
     const f=e.target.files[0]; e.target.value=""; if(!f) return;
@@ -1452,7 +1481,7 @@
     if(READONLY){
       document.body.classList.add("readonly");
       $("#clientName").hidden=true; $("#roMeta").hidden=false; $("#roBadge").hidden=false;
-      $("#btnLoad2").hidden=true; $("#emptyText").textContent="Ce plan n'a pas encore d'image de terrain.";
+      $("#btnLoad2").hidden=true;
       $("#sheetEmpty").textContent="Cliquez une plante ou un élément sur le plan, ou dans la liste ci-dessus, pour lire sa fiche.";
     }
     if(!PID){ $("#bootLoader").textContent="Projet introuvable."; return; }
@@ -1474,7 +1503,7 @@
     $("#clientName").value=state.client;
     document.title="Permabondance — "+(state.client||"Plan de terrain")+(READONLY?" (lecture seule)":"");
 
-    if(state.imageUrl) loadImageData(state.imageUrl); else render();
+    if(state.imageUrl) loadImageData(state.imageUrl); else { showEmpty(); render(); }
     $("#bootLoader").style.display="none";
     loaded=true; lastSavedParts=parts(); setSaveStatus(READONLY?"":"saved");
     if(migrated){ delete lastSavedParts.plants; scheduleSave(); } // les fiches migrées côté client doivent être renvoyées
