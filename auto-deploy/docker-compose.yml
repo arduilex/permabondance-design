@@ -13,8 +13,10 @@ services:
     restart: unless-stopped
     environment:
       REPO_DIR: /repo
+      REPO_URL: https://github.com/arduilex/permabondance-design   # dépôt GitHub surveillé
       BRANCH: main
       INTERVAL: "60"                  # intervalle de vérification en secondes
+      RETRY_INTERVAL: "300"           # délai avant de retenter un déploiement échoué (secondes)
       COMPOSE_PROJECT_NAME: design-app # IMPORTANT : cible le même projet que l'app (réutilise ses volumes)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # pour piloter Docker de l'hôte

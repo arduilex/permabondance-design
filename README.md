@@ -34,7 +34,11 @@ Internet ──443──> Traefik ──(réseau "web")──> design-app (Node/
   (ajoute aussi `@` et `www` si tu veux le site principal plus tard).
   Vérifie : `dig +short design.pepinieres-permabondance.fr` doit renvoyer ton IP.
 
-Copie le dossier `design-app/` sur le serveur (par ex. dans `/opt/`).
+Clone le dépôt sur le serveur (c'est ce clone que met à jour l'[auto-deploy](auto-deploy/README.md)) :
+```bash
+git clone https://github.com/arduilex/permabondance-design ~/design-app
+cd ~/design-app
+```
 
 ### 1. Réseau Docker partagé (une seule fois)
 ```bash
