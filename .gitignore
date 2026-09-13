@@ -23,3 +23,8 @@ uploads/
 
 # Exports de projets (données clients, image incluse)
 *.permab.json
+
+# Sauvegardes / copies de la base et des images de prod (données clients)
+*.sql
+*.tgz
+prod-uploads/

@@ -30,11 +30,11 @@
     items: { name:"Items",   color:"#7b4fa3", kinds:["item"] },
   };
   let itemTypeSel=null; // type d'item proposé par l'outil « Poser un item »
-  /* Types de chemin : préréglages (couleur, largeur en m, motif) appliqués à la création ou au changement de type */
+  /* Types de chemin : préréglages (couleur, largeur en m) appliqués à la création ou au changement de type ; trait continu */
   const PATH_TYPES={
-    route:   { label:"Route",               color:"#8a8a8a", widthM:4,   dash:null },
-    tracteur:{ label:"Passage de tracteur", color:"#8a6d3b", widthM:2.5, dash:"long" },
-    pied:    { label:"Passage à pied",      color:"#d9c8a0", widthM:1,   dash:"dots" },
+    route:   { label:"Route",               color:"#8a8a8a", widthM:4 },
+    tracteur:{ label:"Passage de tracteur", color:"#8a6d3b", widthM:2.5 },
+    pied:    { label:"Passage à pied",      color:"#d9c8a0", widthM:1 },
   };
   let pathType="pied"; // type proposé par l'outil crayon (mémorisé pendant la session)
   /* Formes : polygones fermés (zones, mares) ou polylignes ouvertes (fossés). coll = collection dans state. */
@@ -53,7 +53,7 @@
   let sel={ kind:null, id:null };          // kind : "plant" | "zone" | "pond" | "ditch"
   let tool="select";
   let draft=[], draftCursor=null, draftKind=null; // forme en cours de tracé
-  let calibPts=[], pendingCalib=false;     // calibration d'échelle
+  let calibPts=[], pendingCalib=false, calibConfirm=false; // calibration d'échelle
   let rulerPts=[], rulerCursor=null, rulerDone=false; // règle de mesure
   let collapsedGroups={}, filterText="";   // panneau « Éléments »
   let prefs=loadPrefs();                   // préférences d'affichage (localStorage)
@@ -286,11 +286,17 @@
     },
     calib:{
       shortcut:"e",
-      enter(){ calibPts=[]; renderCalib(); },
-      exit(){ calibPts=[]; renderCalib(); },
-      onClick(e){ addCalibPoint(e.clientX,e.clientY); },
-      onKey(e){ if(e.key==="Enter"&&calibPts.length>=2){ e.preventDefault(); applyCalibration(); return true; } return false; },
+      enter(){ calibPts=[]; calibConfirm=isCal(); renderCalib(); },   // échelle déjà définie : demander confirmation avant de la refaire
+      exit(){ calibPts=[]; calibConfirm=false; renderCalib(); },
+      onClick(e){ if(calibConfirm) return; addCalibPoint(e.clientX,e.clientY); },
+      onKey(e){
+        if(calibConfirm){ if(e.key==="Enter"){ e.preventDefault(); calibConfirm=false; updateHint(); return true; } return false; }
+        if(e.key==="Enter"&&calibPts.length>=2){ e.preventDefault(); applyCalibration(); return true; }
+        return false;
+      },
       hint(){
+        if(calibConfirm) return { html:`L'échelle est déjà définie (<b>${fmtNum(state.scale.meters||0,1)} m</b> entre les 2 points de référence). La redéfinir ? <span style="opacity:.65">Les mesures en mètres seront recalculées.</span>`,
+                                  actions:[{label:"Redéfinir",onClick:()=>{ calibConfirm=false; updateHint(); },title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
         const n=calibPts.length;
         if(n<2) return { text: n===0 ? "Échelle : cliquez un 1ᵉʳ point sur l'image." : "Cliquez le 2ᵉ point.", actions:[{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
         return { text:"Distance réelle entre ces 2 points :", input:{id:"calibDist",value:(state.scale&&state.scale.meters)||"",suffix:"m"},
@@ -723,21 +729,15 @@
     }
     return pts.filter((_,i)=>keep[i]);
   }
-  // Motif de tirets d'un chemin selon son type (en px image, proportionnel à la largeur)
-  function pathDash(z){
-    const t=PATH_TYPES[z.type]; const w=z.width||defaultWidth(1);
-    if(!t || !t.dash) return "";
-    return t.dash==="dots" ? `stroke-dasharray="${(w*0.01).toFixed(1)} ${(w*1.8).toFixed(1)}"` : `stroke-dasharray="${(w*2.2).toFixed(1)} ${(w*1.1).toFixed(1)}"`;
-  }
   function shapeEls(id){ return zoneLayer.querySelectorAll('[data-id="'+id+'"]'); }
   function setShapePoints(id,pts){ const str=ptsStr(pts); shapeEls(id).forEach(el=>el.setAttribute("points",str)); }
 
   function shapeSVG(kind,s,selected){
     const S=SHAPES[kind], cls="shape"+(selected?" sel":"");
     if(S.closed) return `<polygon class="${cls}" data-kind="${kind}" data-id="${s.id}" points="${ptsStr(s.points)}" fill="${s.color}" fill-opacity="${s.opacity}" stroke="${shade(s.color,-0.35)}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
-    const w=s.width||defaultWidth(1), dash=kind==="path"?pathDash(s):"";
+    const w=s.width||defaultWidth(1);
     // ligne visible (largeur réelle) + ligne de saisie invisible à largeur écran constante
-    return `<polyline class="shape-line" data-kind="${kind}" data-id="${s.id}" points="${ptsStr(s.points)}" fill="none" stroke="${s.color}" stroke-width="${w}" stroke-opacity="${s.opacity}" ${dash} stroke-linecap="round" stroke-linejoin="round"/>`
+    return `<polyline class="shape-line" data-kind="${kind}" data-id="${s.id}" points="${ptsStr(s.points)}" fill="none" stroke="${s.color}" stroke-width="${w}" stroke-opacity="${s.opacity}" stroke-linecap="round" stroke-linejoin="round"/>`
          + `<polyline class="${cls} hit" data-kind="${kind}" data-id="${s.id}" points="${ptsStr(s.points)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
   function renderShapes(){
@@ -1139,40 +1139,50 @@
   function fillPlantForm(p){
     FIELDS.forEach(f=>{ const el=$(`#sheetPlant [data-f="${f}"]`); if(el) el.value=p[f]||""; });
     toggleAutre(p);
-    const sr=$("#sizeRange");
-    if(isCal()){
-      const meters=(p.diam||defaultDiam())*state.scale.mPerPx;
-      sr.min="0.3"; sr.max="40"; sr.step="0.1"; sr.value=Math.max(0.3,Math.min(40,meters));
-      $("#sizeVal").textContent="Diamètre ≈ "+meters.toFixed(1).replace(".",",")+" m (réel)";
-    }else{
-      sr.min="5"; sr.max="400"; sr.step="1"; sr.value=p.diam||defaultDiam();
-      $("#sizeVal").textContent="Diamètre ≈ "+Math.round(sr.value)+" px sur l'image";
-    }
+    sizeControls("#sizeRange","#sizeNum","#sizeUnit","#sizeVal", p.diam||defaultDiam(), isCal()?[0.3,40]:[5,400], "Diamètre");
     colorPicker($("#colorPick"),"pcolor",p.color,c=>{ p.color=c; renderMarkers(); renderElements(); scheduleSave(); });
     const op=Math.round((p.opacity==null?1:p.opacity)*100);
     $("#pOpacity").value=op; $("#pOpacityVal").textContent="Opacité "+op+" %";
   }
-  function widthLabel(w){ return isCal() ? "Largeur ≈ "+fmtNum(w*state.scale.mPerPx,1)+" m" : "Largeur ≈ "+Math.round(w)+" px"; }
+  /* Taille / largeur : curseur + champ de valeur exacte, en mètres si l'échelle est définie, sinon en px image.
+     px : valeur interne (px image) ; range [min,max] en unités d'affichage ; label : « Diamètre » / « Largeur ». */
+  function toDisp(px){ return isCal() ? px*state.scale.mPerPx : px; }
+  function fromDisp(v){ return isCal() ? v/state.scale.mPerPx : v; }
+  function fmtDisp(v){ return isCal() ? (Math.round(v*10)/10).toString() : String(Math.round(v)); }
+  function sizeText(label,px){ return isCal() ? label+" ≈ "+fmtNum(toDisp(px),1)+" m (réel)" : label+" ≈ "+Math.round(px)+" px sur l'image"; }
+  function sizeControls(rangeSel,numSel,unitSel,valSel,px,range,label){
+    const sr=$(rangeSel), num=$(numSel), v=toDisp(px);
+    sr.min=String(range[0]); sr.max=String(range[1]); sr.step=isCal()?"0.1":"1"; sr.value=Math.max(range[0],Math.min(range[1],v));
+    num.min=String(range[0]); num.step=isCal()?"0.1":"1"; num.value=fmtDisp(v);
+    $(unitSel).textContent=isCal()?"m":"px"; $(valSel).textContent=sizeText(label,px);
+  }
+  // Applique une valeur saisie (unités d'affichage) ; source = "range" | "num" → l'autre contrôle est synchronisé
+  function syncSize(rangeSel,numSel,valSel,label,v,source){
+    const sr=$(rangeSel), num=$(numSel);
+    if(source==="range") num.value=fmtDisp(v); else sr.value=Math.max(+sr.min,Math.min(+sr.max,v));
+    $(valSel).textContent=sizeText(label,fromDisp(v));
+    return fromDisp(v);
+  }
+  function widthLabel(w){ return sizeText("Largeur",w); }
   function fillItemForm(it){
     const t=itemType(it.typeId);
     $("#itemPreview").innerHTML=t?`<img src="/uploads/${esc(t.image)}" alt="">`:"";
     $("#iLabel").value=it.label||""; $("#iLabel").placeholder=t?t.name:"Nom";
     const sl=$("#iType"); sl.innerHTML=state.itemTypes.map(x=>`<option value="${esc(x.id)}" ${x.id===it.typeId?"selected":""}>${esc(x.name)}</option>`).join("");
-    const sr=$("#iSize"), w=it.size||defaultItemSize();
-    if(isCal()){ sr.min="0.2"; sr.max="30"; sr.step="0.1"; sr.value=Math.max(0.2,Math.min(30,w*state.scale.mPerPx)); $("#iSizeVal").textContent="Largeur ≈ "+fmtNum(w*state.scale.mPerPx,1)+" m (réel)"; }
-    else { sr.min="5"; sr.max="400"; sr.step="1"; sr.value=Math.round(w); $("#iSizeVal").textContent="Largeur ≈ "+Math.round(w)+" px sur l'image"; }
+    sizeControls("#iSize","#iSizeNum","#iSizeUnit","#iSizeVal", it.size||defaultItemSize(), isCal()?[0.2,30]:[5,400], "Largeur");
     const op=Math.round((it.opacity==null?1:it.opacity)*100);
     $("#iOpacity").value=op; $("#iOpacityVal").textContent="Opacité "+op+" %";
   }
   $("#iLabel").addEventListener("input",e=>{ const it=selItem(); if(!it) return; it.label=e.target.value; $("#sheetTitle").textContent=itemName(it); renderLabels(); renderElements(); scheduleSave(); });
   $("#iType").addEventListener("change",e=>{ const it=selItem(); if(!it) return; it.typeId=e.target.value; render(); scheduleSave(); });
-  $("#iSize").addEventListener("input",e=>{
-    const it=selItem(); if(!it) return;
-    it.size = isCal() ? (+e.target.value)/state.scale.mPerPx : +e.target.value;
-    $("#iSizeVal").textContent = isCal() ? "Largeur ≈ "+fmtNum(it.size*state.scale.mPerPx,1)+" m (réel)" : "Largeur ≈ "+Math.round(it.size)+" px sur l'image";
+  function applyItemSize(v,source){
+    const it=selItem(); if(!it || !(v>0)) return;
+    it.size=syncSize("#iSize","#iSizeNum","#iSizeVal","Largeur",v,source);
     const d=itemDims(it), m=world.querySelector('.marker[data-id="'+it.id+'"]'); if(m){ m.style.width=d.w+"px"; m.style.height=d.h+"px"; }
     renderLabels(); scheduleSave();
-  });
+  }
+  $("#iSize").addEventListener("input",e=>applyItemSize(+e.target.value,"range"));
+  $("#iSizeNum").addEventListener("input",e=>applyItemSize(parseFloat(String(e.target.value).replace(",",".")),"num"));
   $("#iOpacity").addEventListener("input",e=>{
     const it=selItem(); if(!it) return;
     it.opacity=(+e.target.value)/100; $("#iOpacityVal").textContent="Opacité "+e.target.value+" %";
@@ -1189,12 +1199,7 @@
     $("#sTypeField").hidden=kind!=="path";
     if(kind==="path") $("#sType").value=PATH_TYPES[z.type]?z.type:"pied";
     const wf=$("#sWidthField"); wf.hidden=S.closed;
-    if(!S.closed){
-      const sw=$("#sWidth"), w=z.width||defaultWidth(1);
-      if(isCal()){ sw.min="0.1"; sw.max="15"; sw.step="0.1"; sw.value=Math.max(0.1,Math.min(15,w*state.scale.mPerPx)); }
-      else { sw.min="1"; sw.max=String(Math.max(20,Math.round(imgNatW*0.05))); sw.step="1"; sw.value=Math.round(w); }
-      $("#sWidthVal").textContent=widthLabel(w);
-    }
+    if(!S.closed) sizeControls("#sWidth","#sWidthNum","#sWidthUnit","#sWidthVal", z.width||defaultWidth(1), isCal()?[0.1,15]:[1,Math.max(20,Math.round(imgNatW*0.05))], "Largeur");
     // Données : surface / périmètre (polygones) ou longueur (polylignes), en unités réelles si l'échelle est définie
     const stats=$("#shapeStats");
     if(z.points && z.points.length>=2){
@@ -1221,9 +1226,10 @@
   $("#sheetPlant").addEventListener("input",e=>{
     const f=e.target.getAttribute("data-f"); if(!f) return;
     const p=selPlant(); if(!p) return;
-    if(f==="diam"){
-      if(isCal()){ const meters=+e.target.value; p.diam=meters/state.scale.mPerPx; $("#sizeVal").textContent="Diamètre ≈ "+meters.toFixed(1).replace(".",",")+" m (réel)"; }
-      else { p.diam=+e.target.value; $("#sizeVal").textContent="Diamètre ≈ "+Math.round(p.diam)+" px sur l'image"; }
+    if(f==="diam"||f==="diamNum"){
+      const v=f==="diam" ? +e.target.value : parseFloat(String(e.target.value).replace(",","."));
+      if(!(v>0)) return;
+      p.diam=syncSize("#sizeRange","#sizeNum","#sizeVal","Diamètre",v,f==="diam"?"range":"num");
       renderMarkers(); renderLabels(); scheduleSave(); return;
     }
     if(f==="opacity"){
@@ -1240,14 +1246,14 @@
   // Saisie en direct dans la fiche forme
   $("#sCat").addEventListener("input",e=>{ const sh=selShape(); if(!sh) return; sh.s.cat=e.target.value; $("#sheetTitle").textContent=sh.s.cat||(sh.S.label+" sans nom"); renderElements(); renderLabels(); scheduleSave(); });
   $("#sOpacity").addEventListener("input",e=>{ const sh=selShape(); if(!sh) return; sh.s.opacity=(+e.target.value)/100; $("#sOpacityVal").textContent="Opacité "+e.target.value+" %"; renderShapes(); renderElements(); scheduleSave(); });
-  $("#sWidth").addEventListener("input",e=>{
-    const sh=selShape(); if(!sh || sh.S.closed) return;
-    sh.s.width = isCal() ? (+e.target.value)/state.scale.mPerPx : +e.target.value;
-    $("#sWidthVal").textContent=widthLabel(sh.s.width);
-    if(sh.kind==="path") renderShapes(); // le motif de tirets dépend de la largeur
-    else { const line=zoneLayer.querySelector('.shape-line[data-id="'+sh.s.id+'"]'); if(line) line.setAttribute("stroke-width",sh.s.width); }
+  function applyShapeWidth(v,source){
+    const sh=selShape(); if(!sh || sh.S.closed || !(v>0)) return;
+    sh.s.width=syncSize("#sWidth","#sWidthNum","#sWidthVal","Largeur",v,source);
+    const line=zoneLayer.querySelector('.shape-line[data-id="'+sh.s.id+'"]'); if(line) line.setAttribute("stroke-width",sh.s.width);
     scheduleSave();
-  });
+  }
+  $("#sWidth").addEventListener("input",e=>applyShapeWidth(+e.target.value,"range"));
+  $("#sWidthNum").addEventListener("input",e=>applyShapeWidth(parseFloat(String(e.target.value).replace(",",".")),"num"));
   // Changer le type d'un chemin applique ses préréglages (couleur, largeur, motif) ; on peut ensuite les ajuster
   $("#sType").addEventListener("change",e=>{
     const sh=selShape(); if(!sh || sh.kind!=="path") return;
@@ -1321,9 +1327,9 @@
     const view=b.dataset.share==="view";
     if(view && !state.viewToken){ alert("Lien de lecture seule indisponible pour ce projet."); return; }
     const url=location.origin+(view?"/v/"+encodeURIComponent(state.viewToken):"/p/"+encodeURIComponent(PID));
-    const label=view?"Lien de lecture seule copié ✓":"Lien d'édition copié ✓";
+    const label=view?"Lien lecture copié ✓":"Lien édition copié ✓";
     try{ await navigator.clipboard.writeText(url); const el=$("#saveStatus .txt"); const old=el.textContent; el.textContent=label; setTimeout(()=>{ el.textContent=old; },1800); }
-    catch(_){ prompt(view?"Lien de lecture seule :":"Lien d'édition :",url); }
+    catch(_){ prompt(view?"Lien lecture :":"Lien édition :",url); }
   });
 
   /* ==========================================================================

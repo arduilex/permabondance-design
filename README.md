@@ -87,7 +87,7 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
 3. Dans l'éditeur : **Importer une image satellite**, puis définir l'**échelle** (outil `E`,
    deux points + distance réelle) pour travailler en mètres.
 4. Les outils (barre de gauche, un seul actif à la fois, `Échap` = sélection) :
-   Plante `P`, Zone `Z`, Mare `M`, Fossé `F`, Chemin au crayon `C` (route / tracteur / à pied),
+   Plante `P`, Zone `Z`, Mare `M`, Fossé `F`, Chemin au crayon `C` (route / tracteur / à pied, trait continu),
    Item `I` (image PNG importée dans la bibliothèque du projet), Règle `R`, Échelle `E`.
    Le panneau de droite liste les éléments par catégorie (œil = masquer sur le plan,
    `+` = outil correspondant) au-dessus de la fiche de l'élément sélectionné.

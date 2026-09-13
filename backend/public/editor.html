@@ -52,8 +52,8 @@
   <div class="share-wrap" id="shareWrap">
     <button class="btn ghost" id="btnShare" aria-haspopup="menu" aria-expanded="false" title="Partager le plan"><svg class="ic"><use href="#i-link"/></svg><span class="lbl">Partager</span></button>
     <div class="share-menu" id="shareMenu" role="menu">
-      <button type="button" data-share="view" role="menuitem"><b>Copier le lien de lecture seule</b><span>Pour vos clients : consultation et mesures, sans modification.</span></button>
-      <button type="button" data-share="edit" role="menuitem"><b>Copier le lien d'édition</b><span>Quiconque a ce lien peut modifier le plan.</span></button>
+      <button type="button" data-share="view" role="menuitem"><b>Lien lecture</b><span>Consulter le plan, sans le modifier</span></button>
+      <button type="button" data-share="edit" role="menuitem"><b>Lien édition</b><span>Consulter et modifier le plan</span></button>
     </div>
   </div>
   <a class="btn" href="/" id="btnBack" title="Retour à la liste des projets"><svg class="ic"><use href="#i-back"/></svg><span class="lbl">Projets</span></a>
@@ -149,7 +149,7 @@
           </div>
           <div class="field" id="autreField" hidden><label>Préciser le type</label><input data-f="typeAutre" placeholder="Précisez le type…"></div>
           <div class="field"><label>Taille sur le plan</label>
-            <input type="range" data-f="diam" id="sizeRange" min="5" max="400" step="1">
+            <div class="range-row"><input type="range" data-f="diam" id="sizeRange" min="5" max="400" step="1"><input type="number" class="num-in" data-f="diamNum" id="sizeNum" aria-label="Taille exacte"><span class="unit" id="sizeUnit"></span></div>
             <div class="rangeval" id="sizeVal"></div>
           </div>
           <div class="field"><label>Couleur du repère</label><div class="colorpick" id="colorPick"></div></div>
@@ -168,7 +168,7 @@
           <div class="field"><label>Nom</label><input id="iLabel" placeholder="ex. Banc, Cabane, Ruche…"></div>
           <div class="field"><label>Type d'item</label><select id="iType"></select></div>
           <div class="field"><label>Taille sur le plan</label>
-            <input type="range" id="iSize">
+            <div class="range-row"><input type="range" id="iSize"><input type="number" class="num-in" id="iSizeNum" aria-label="Taille exacte"><span class="unit" id="iSizeUnit"></span></div>
             <div class="rangeval" id="iSizeVal"></div>
           </div>
           <div class="field"><label>Opacité</label>
@@ -190,7 +190,7 @@
             <select id="sType"><option value="route">Route</option><option value="tracteur">Passage de tracteur</option><option value="pied">Passage à pied</option></select>
           </div>
           <div class="field" id="sWidthField" hidden><label>Largeur</label>
-            <input type="range" id="sWidth">
+            <div class="range-row"><input type="range" id="sWidth"><input type="number" class="num-in" id="sWidthNum" aria-label="Largeur exacte"><span class="unit" id="sWidthUnit"></span></div>
             <div class="rangeval" id="sWidthVal"></div>
           </div>
           <div class="field"><label>Couleur</label><div class="colorpick" id="sColorPick"></div></div>

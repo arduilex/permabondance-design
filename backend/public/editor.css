@@ -344,6 +344,11 @@ body.nopanel aside{display:none}
 .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--leaf)}
 .field input[type=range]{padding:0;cursor:pointer;accent-color:var(--leaf)}
 .rangeval{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);margin-top:4px}
+/* Curseur + valeur exacte */
+.range-row{display:flex;align-items:center;gap:8px}
+.range-row input[type=range]{flex:1;min-width:0}
+.field .range-row .num-in{width:78px;flex:none;padding:6px 8px;text-align:right;font-family:var(--font-mono);font-size:12.5px}
+.range-row .unit{font-size:12px;color:var(--muted);width:22px;flex:none}
 .row2{display:flex;gap:10px}.row2>*{flex:1;min-width:0}
 .colorpick{display:flex;gap:8px;flex-wrap:wrap}
 .colorpick label{cursor:pointer}
