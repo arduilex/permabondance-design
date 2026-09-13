@@ -652,7 +652,7 @@
         if(!s.cat || !s.points || s.points.length<2) return;
         const c=S.closed?centroid(s.points):midOfPath(s.points);
         const zl=document.createElement("div");
-        zl.className="zlbl"+(kind==="zone"?"":kind==="path"?" path":" water"); zl.dataset.kind=kind;
+        zl.className="zlbl"+(kind==="zone"?"":" water"); zl.dataset.kind=kind; zl.dataset.id=s.id;
         zl.style.left=c.x+"%"; zl.style.top=c.y+"%"; zl.textContent=s.cat;
         labelLayer.appendChild(zl);
       });
@@ -672,31 +672,41 @@
   }
 
   /* ---------- Étiquettes intelligentes ----------
-     Une étiquette qui en chevaucherait une déjà affichée est masquée (au dézoom) ; l'élément
-     sélectionné passe en premier, puis les plus grands. Le survol force l'affichage. */
+     Une étiquette qui en chevaucherait une déjà affichée est masquée (au dézoom). Ordre de priorité :
+     l'élément sélectionné, puis les étiquettes « autres que plante » (zones, mares, fossés, items ;
+     les plus grandes d'abord), puis les plantes (les plus grandes d'abord). Une plante qui touche
+     n'importe quelle autre étiquette disparaît donc ; entre deux « autres », la plus petite disparaît.
+     Le survol force l'affichage. */
   let labelBoxes=[], hoverId=null;
+  const KIND_RANK={ zone:0, pond:0, ditch:1, item:2, plant:3 };
   function measureLabels(){
     labelBoxes=[];
     const byId={};
-    state.plants.forEach(p=>{ const dm=p.diam||defaultDiam(); byId[p.id]={x:p.x,y:p.y,boxH:dm,size:dm}; });
-    state.items.forEach(it=>{ const d=itemDims(it); byId[it.id]={x:it.x,y:it.y,boxH:d.h,size:Math.max(d.w,d.h)}; });
-    labelLayer.querySelectorAll(".lblbox").forEach(el=>{
+    state.plants.forEach(p=>{ const dm=p.diam||defaultDiam(); byId[p.id]={x:p.x,y:p.y,boxH:dm,size:dm,kind:"plant"}; });
+    state.items.forEach(it=>{ const d=itemDims(it); byId[it.id]={x:it.x,y:it.y,boxH:d.h,size:Math.max(d.w,d.h),kind:"item"}; });
+    for(const kind in SHAPES){ if(kind==="path") continue; const S=SHAPES[kind];
+      state[S.coll].forEach(s=>{ if(!s.points||s.points.length<2) return; const c=S.closed?centroid(s.points):midOfPath(s.points);
+        byId[s.id]={x:c.x,y:c.y,boxH:0,size:S.closed?polyMetrics(s.points).areaPx:pathLength(s.points),kind,centered:true}; });
+    }
+    labelLayer.querySelectorAll(".lblbox, .zlbl").forEach(el=>{
       const o=byId[el.dataset.id]; if(!o) return;
-      const r=el.querySelector(".meta").getBoundingClientRect(); // taille écran (contre-échelle => constante)
-      labelBoxes.push({ el, id:el.dataset.id, x:o.x, y:o.y, boxH:o.boxH, size:o.size, w:r.width, h:r.height });
+      if(isHiddenCat(catOfKind(o.kind))) return; // catégorie masquée : n'occupe pas de place
+      const r=(el.querySelector(".meta")||el).getBoundingClientRect(); // taille écran (contre-échelle => constante)
+      labelBoxes.push({ el, id:el.dataset.id, kind:o.kind, centered:!!o.centered, x:o.x, y:o.y, boxH:o.boxH, size:o.size, w:r.width, h:r.height });
     });
     layoutLabels();
   }
   function layoutLabels(){
     layoutScale=scale;
     if(!labelBoxes.length) return;
-    const pri=b=>(b.id===sel.id)?0:1;
+    const pri=b=>(b.id===sel.id)?-1:KIND_RANK[b.kind];
     const order=labelBoxes.slice().sort((a,b)=>pri(a)-pri(b) || b.size-a.size);
     const placed=[];
     order.forEach(b=>{
-      const cx=b.x/100*imgNatW*scale, top=b.y/100*imgNatH*scale+0.36*b.boxH*scale+2;
+      const cx=b.x/100*imgNatW*scale, cy=b.y/100*imgNatH*scale;
+      const top=b.centered ? cy-b.h/2 : cy+0.36*b.boxH*scale+2; // étiquette de forme centrée ; étiquette de marqueur sous le marqueur
       const rc={l:cx-b.w/2-3, t:top-2, r:cx+b.w/2+3, b:top+b.h+2};
-      const hit=pri(b)>0 && placed.some(q=>rc.l<q.r && rc.r>q.l && rc.t<q.b && rc.b>q.t);
+      const hit=pri(b)>=0 && placed.some(q=>rc.l<q.r && rc.r>q.l && rc.t<q.b && rc.b>q.t);
       b.el.classList.toggle("hide",hit);
       if(!hit) placed.push(rc);
     });
