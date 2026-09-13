@@ -140,7 +140,7 @@ app.get("/api/view/:token", async (req, res) => {
 // Mise à jour d'un projet — public (édition complète via lien partagé).
 // Chaque champ absent du corps est laissé tel quel (COALESCE).
 const JSON_COLS = ["plants", "zones", "scale", "ponds", "ditches", "paths", "items", "item_types"];
-app.patch("/api/projects/:id", async (req, res) => {
+async function updateProject(req, res) {
   const b = req.body || {};
   const name = b.name === undefined ? null : String(b.name).slice(0, 200);
   const planDate = b.plan_date === undefined ? null : String(b.plan_date).slice(0, 40);
@@ -157,7 +157,10 @@ app.patch("/api/projects/:id", async (req, res) => {
   );
   if (!rowCount) return res.status(404).json({ error: "projet introuvable" });
   res.json({ ok: true });
-});
+}
+app.patch("/api/projects/:id", updateProject);
+// Même mise à jour en POST : utilisée par navigator.sendBeacon à la fermeture de la page (PATCH impossible)
+app.post("/api/projects/:id/beacon", updateProject);
 
 // Suppression d'un projet — ADMIN uniquement
 app.delete("/api/projects/:id", requireAdmin, async (req, res) => {

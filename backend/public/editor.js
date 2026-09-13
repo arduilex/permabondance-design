@@ -87,35 +87,67 @@
   }
   function savePrefs(){ try{ localStorage.setItem("pb.editor",JSON.stringify(prefs)); }catch(_){} }
 
-  /* ---------- Sauvegarde serveur (autosave) ---------- */
-  let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSaved="";
+  /* ---------- Sauvegarde serveur (autosave) ----------
+     Seuls les champs modifiés depuis le dernier enregistrement sont envoyés (le serveur laisse
+     les autres intacts). L'échelle est enregistrée immédiatement ; le reste est différé de 1,1 s ;
+     à la fermeture de la page, ce qui reste en attente part via sendBeacon. */
+  let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSavedParts={};
   function payload(){ return { name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale }; }
-  function snapshot(){ return JSON.stringify(payload()); }
+  function parts(){ const p=payload(), o={}; for(const k in p) o[k]=JSON.stringify(p[k]); return o; }
+  // { body: champs modifiés, parts: état complet à mémoriser si l'envoi réussit } ou null si rien à enregistrer
+  function pendingDiff(){
+    const cur=parts(), body={}; let any=false;
+    for(const k in cur){ if(cur[k]!==lastSavedParts[k]){ body[k]=JSON.parse(cur[k]); any=true; } }
+    return any?{body,parts:cur}:null;
+  }
+  function snapshot(){ return JSON.stringify(parts()); }
+  function isDirty(){ return !!pendingDiff(); }
   function setSaveStatus(s){
     const el=$("#saveStatus"); el.className="save "+(s||"");
     el.querySelector(".txt").textContent={pending:"Modifications…",saving:"Enregistrement…",saved:"Enregistré",error:"Échec d'enregistrement"}[s]||"";
   }
+  // Message temporaire dans la zone d'état (ex. « Échelle enregistrée ✓ »)
+  function flashStatus(text,ms){ const el=$("#saveStatus .txt"); const old=el.textContent; el.textContent=text; setTimeout(()=>{ if(el.textContent===text) el.textContent=old; },ms||2000); }
   function scheduleSave(){
     if(!loaded || READONLY) return;
     setSaveStatus("pending");
     clearTimeout(saveTimer);
     saveTimer=setTimeout(doSave,1100);
   }
+  // Enregistrement immédiat (sans attendre le délai) ; résout true si tout est enregistré
+  function saveNow(){ if(!loaded || READONLY) return Promise.resolve(false); clearTimeout(saveTimer); return doSave(); }
   async function doSave(){
-    if(saving){ dirtyAgain=true; return; }
-    const snap=snapshot();
-    if(snap===lastSaved){ setSaveStatus("saved"); return; }
+    if(saving){ dirtyAgain=true; return false; }
+    const d=pendingDiff();
+    if(!d){ setSaveStatus("saved"); return true; }
     saving=true; setSaveStatus("saving");
+    let ok=false;
     try{
-      const r=await fetch(API,{ method:"PATCH", headers:{"Content-Type":"application/json"}, body:snap });
-      if(r.ok){ lastSaved=snap; setSaveStatus("saved"); }
+      const r=await fetch(API,{ method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(d.body) });
+      if(r.ok){ lastSavedParts=d.parts; setSaveStatus("saved"); ok=true; }
       else setSaveStatus("error");
     }catch(_){ setSaveStatus("error"); }
     saving=false;
-    if(dirtyAgain){ dirtyAgain=false; scheduleSave(); }
+    if(dirtyAgain){ dirtyAgain=false; scheduleSave(); return false; }
+    return ok;
   }
+  // Fermeture / masquage de la page : ce qui est en attente part tout de suite
+  function flushSave(){
+    if(!loaded || READONLY) return;
+    const d=pendingDiff(); if(!d) return;
+    clearTimeout(saveTimer);
+    try{
+      const sent=navigator.sendBeacon(API+"/beacon", new Blob([JSON.stringify(d.body)],{type:"application/json"}));
+      if(sent){ lastSavedParts=d.parts; setSaveStatus("saved"); }
+    }catch(_){}
+  }
+  window.addEventListener("pagehide",flushSave);
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSave(); });
+  // beforeunload précède pagehide : on envoie d'abord ; on ne retient l'utilisateur que si l'envoi n'a pas pu partir
   window.addEventListener("beforeunload",e=>{
-    if(loaded && !READONLY && snapshot()!==lastSaved){ e.preventDefault(); e.returnValue=""; }
+    if(!loaded || READONLY) return;
+    flushSave();
+    if(isDirty()){ e.preventDefault(); e.returnValue=""; }
   });
 
   /* ---------- Vue : transformation, zoom, recadrage ---------- */
@@ -887,7 +919,9 @@
     const pixDist=Math.hypot((b.x-a.x)/100*imgNatW,(b.y-a.y)/100*imgNatH);
     if(pixDist<1){ alert("Les deux points sont trop proches, recommencez."); return; }
     state.scale={ mPerPx:meters/pixDist, p1:a, p2:b, meters:meters };
-    setTool("select"); updateScaleBar(); scheduleSave();
+    setTool("select"); updateScaleBar();
+    // l'échelle conditionne toutes les mesures : enregistrée tout de suite, avec confirmation visible
+    saveNow().then(ok=>{ if(ok) flashStatus("Échelle enregistrée ✓",2500); else if($("#saveStatus").classList.contains("error")) alert("L'échelle n'a pas pu être enregistrée (connexion au serveur ?). Elle sera renvoyée automatiquement à la prochaine modification."); });
   }
 
   /* ==========================================================================
@@ -1328,7 +1362,7 @@
     if(view && !state.viewToken){ alert("Lien de lecture seule indisponible pour ce projet."); return; }
     const url=location.origin+(view?"/v/"+encodeURIComponent(state.viewToken):"/p/"+encodeURIComponent(PID));
     const label=view?"Lien lecture copié ✓":"Lien édition copié ✓";
-    try{ await navigator.clipboard.writeText(url); const el=$("#saveStatus .txt"); const old=el.textContent; el.textContent=label; setTimeout(()=>{ el.textContent=old; },1800); }
+    try{ await navigator.clipboard.writeText(url); flashStatus(label,1800); }
     catch(_){ prompt(view?"Lien lecture :":"Lien édition :",url); }
   });
 
@@ -1367,8 +1401,8 @@
 
     if(state.imageUrl) loadImageData(state.imageUrl); else render();
     $("#bootLoader").style.display="none";
-    loaded=true; lastSaved=snapshot(); setSaveStatus(READONLY?"":"saved");
-    if(migrated){ lastSaved=""; scheduleSave(); }
+    loaded=true; lastSavedParts=parts(); setSaveStatus(READONLY?"":"saved");
+    if(migrated){ delete lastSavedParts.plants; scheduleSave(); } // les fiches migrées côté client doivent être renvoyées
     updateHint();
   }
   boot();
