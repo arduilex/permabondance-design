@@ -728,12 +728,14 @@
     }
     return best;
   }
+  // Survol : l'étiquette ET le dessin (plante ou item) passent en surbrillance
   function setHover(p){
     const id=p?p.id:null;
     if(id===hoverId) return;
-    if(hoverId){ const old=labelLayer.querySelector('.lblbox[data-id="'+hoverId+'"]'); if(old) old.classList.remove("hover"); }
-    hoverId=id;
-    if(id){ const el=labelLayer.querySelector('.lblbox[data-id="'+id+'"]'); if(el) el.classList.add("hover"); }
+    const mark=(pid,on)=>{ if(!pid) return; const sel='[data-id="'+pid+'"]';
+      const lb=labelLayer.querySelector('.lblbox'+sel), mk=world.querySelector('.marker'+sel);
+      if(lb) lb.classList.toggle("hover",on); if(mk) mk.classList.toggle("hover",on); };
+    mark(hoverId,false); hoverId=id; mark(id,true);
   }
 
   /* ==========================================================================
