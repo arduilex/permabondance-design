@@ -38,6 +38,8 @@ async function init() {
   for (const col of ["ponds", "ditches", "paths", "items", "item_types"]) {
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS ${col} JSONB NOT NULL DEFAULT '[]'::jsonb`);
   }
+  // Palette de couleurs du projet (null = palette par défaut de l'éditeur)
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS palette JSONB`);
   // Jeton de lecture seule (lien client) ; l'id reste le jeton d'édition. Rempli pour les projets existants.
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_token TEXT UNIQUE`);
   const { rows: noToken } = await pool.query(`SELECT id FROM projects WHERE view_token IS NULL`);

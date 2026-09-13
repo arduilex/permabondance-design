@@ -139,7 +139,7 @@ app.get("/api/view/:token", async (req, res) => {
 
 // Mise à jour d'un projet — public (édition complète via lien partagé).
 // Chaque champ absent du corps est laissé tel quel (COALESCE).
-const JSON_COLS = ["plants", "zones", "scale", "ponds", "ditches", "paths", "items", "item_types"];
+const JSON_COLS = ["plants", "zones", "scale", "ponds", "ditches", "paths", "items", "item_types", "palette"];
 async function updateProject(req, res) {
   const b = req.body || {};
   const name = b.name === undefined ? null : String(b.name).slice(0, 200);

@@ -53,7 +53,14 @@ lecture seule, qui doit connaître tous les outils pour savoir quoi masquer.
       ou un clic ailleurs annule. Même chose pour la touche `Suppr`, la
       bibliothèque d'items et la liste des projets (admin).
 
+- [x] **13. Palette de couleurs éditable** — chaque pastille se modifie via le
+      sélecteur de couleur de l'OS (crayon), bouton rond « + » pour ajouter une
+      couleur ; palette enregistrée dans le projet.
+- [x] **14. Chemins sans étiquette sur la carte** (nom visible dans la liste et la fiche).
+
 Décisions prises (validées le 13/09/2026) :
+- 13 : palette **par projet** (comme la bibliothèque d'items) ; modifier une pastille
+  ne recolore pas les éléments qui l'utilisaient déjà (seul l'élément sélectionné change).
 - 2 : `libre` fusionné à la fin de la description plutôt que supprimé à sec.
 - 8 : bibliothèque d'items **par projet** (simple, cohérent avec le lien
   d'édition public) plutôt qu'un catalogue global réservé à l'admin.

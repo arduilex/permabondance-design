@@ -39,7 +39,7 @@
   let pathType="pied"; // type proposé par l'outil crayon (mémorisé pendant la session)
   /* Formes : polygones fermés (zones, mares) ou polylignes ouvertes (fossés). coll = collection dans state. */
   const SHAPES={
-    zone: { coll:"zones",   closed:true,  label:"Zone",  plural:"Zones",  noun:"la zone",  opacity:0.35, color:()=>COLORS[(state.zones.length+1)%COLORS.length], catLabel:"Catégorie", catList:"zoneCats", catPh:"ex. Potager, Verger, Pelouse…" },
+    zone: { coll:"zones",   closed:true,  label:"Zone",  plural:"Zones",  noun:"la zone",  opacity:0.35, color:()=>{ const p=palette(); return p[(state.zones.length+1)%p.length]; }, catLabel:"Catégorie", catList:"zoneCats", catPh:"ex. Potager, Verger, Pelouse…" },
     pond: { coll:"ponds",   closed:true,  label:"Mare",  plural:"Mares",  noun:"la mare",  opacity:0.55, color:()=>"#3a78c7", catLabel:"Nom", catPh:"ex. Mare des canards" },
     ditch:{ coll:"ditches", closed:false, label:"Fossé", plural:"Fossés", noun:"le fossé", opacity:0.9,  color:()=>"#2f6fb3", catLabel:"Nom", catPh:"ex. Fossé nord", width:()=>defaultWidth(1) },
     path: { coll:"paths",   closed:false, label:"Chemin",plural:"Chemins",noun:"le chemin",opacity:0.9,  color:()=>PATH_TYPES[pathType].color, catLabel:"Nom", catPh:"ex. Allée principale", width:()=>defaultWidth(PATH_TYPES[pathType].widthM) },
@@ -48,7 +48,10 @@
   function isHiddenCat(key){ return !!prefs.hidden[key]; }
 
   /* ---------- État ---------- */
-  let state={ client:"", planDate:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, viewToken:null };
+  let state={ client:"", planDate:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
+  // Palette du projet (copie : les modifications passent par state.palette) ; défaut = COLORS
+  const isHex=c=>/^#[0-9a-f]{6}$/i.test(String(c||""));
+  function palette(){ const p=Array.isArray(state.palette)?state.palette.filter(isHex):[]; return (p.length?p:COLORS).slice(); }
   let scale=1, tx=0, ty=0, imgNatW=0, imgNatH=0;
   let sel={ kind:null, id:null };          // kind : "plant" | "zone" | "pond" | "ditch"
   let tool="select";
@@ -92,7 +95,7 @@
      les autres intacts). L'échelle est enregistrée immédiatement ; le reste est différé de 1,1 s ;
      à la fermeture de la page, ce qui reste en attente part via sendBeacon. */
   let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSavedParts={};
-  function payload(){ return { name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale }; }
+  function payload(){ return { name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette }; }
   function parts(){ const p=payload(), o={}; for(const k in p) o[k]=JSON.stringify(p[k]); return o; }
   // { body: champs modifiés, parts: état complet à mémoriser si l'envoi réussit } ou null si rien à enregistrer
   function pendingDiff(){
@@ -496,8 +499,8 @@
   }
   function placeAt(cx,cy){
     const p=clientToPct(cx,cy);
-    const num=nextNumIn(state.plants);
-    const plant={ id:newId(), num, x:p.x, y:p.y, color:COLORS[(num+1)%COLORS.length], diam:defaultDiam(), opacity:1 };
+    const num=nextNumIn(state.plants), pal=palette();
+    const plant={ id:newId(), num, x:p.x, y:p.y, color:pal[(num+1)%pal.length], diam:defaultDiam(), opacity:1 };
     FIELDS.forEach(f=>plant[f]="");
     state.plants.push(plant);
     sel={kind:"plant",id:plant.id};
@@ -629,6 +632,7 @@
     labelLayer.innerHTML="";
     if(!hasImage()) return;
     for(const kind in SHAPES){
+      if(kind==="path") continue; // les chemins n'ont pas d'étiquette sur la carte (nom visible dans la liste et la fiche)
       const S=SHAPES[kind];
       state[S.coll].forEach(s=>{
         if(!s.cat || !s.points || s.points.length<2) return;
@@ -1174,7 +1178,11 @@
     FIELDS.forEach(f=>{ const el=$(`#sheetPlant [data-f="${f}"]`); if(el) el.value=p[f]||""; });
     toggleAutre(p);
     sizeControls("#sizeRange","#sizeNum","#sizeUnit","#sizeVal", p.diam||defaultDiam(), isCal()?[0.3,40]:[5,400], "Diamètre");
-    colorPicker($("#colorPick"),"pcolor",p.color,c=>{ p.color=c; renderMarkers(); renderElements(); scheduleSave(); });
+    colorPicker($("#colorPick"),"pcolor",p.color,(c,live)=>{
+      p.color=c;
+      if(live){ const m=world.querySelector('.marker[data-id="'+p.id+'"] .canopy'); if(m) m.innerHTML=iconSVG(p); return; } // aperçu pendant le choix
+      renderMarkers(); renderElements(); scheduleSave();
+    });
     const op=Math.round((p.opacity==null?1:p.opacity)*100);
     $("#pOpacity").value=op; $("#pOpacityVal").textContent="Opacité "+op+" %";
   }
@@ -1244,16 +1252,36 @@
         stats.innerHTML=`<div class="stat"><span>Surface</span><b>${aStr}</b></div><div class="stat"><span>Périmètre</span><b>${fmtNum(perM,1)} m</b></div>`;
       } else stats.innerHTML=`<div class="stat"><span>Longueur</span><b>${fmtDist(pathLength(z.points))}</b></div>`;
     } else stats.innerHTML="";
-    colorPicker($("#sColorPick"),"scolor",z.color,c=>{ z.color=c; renderShapes(); renderElements(); scheduleSave(); });
+    colorPicker($("#sColorPick"),"scolor",z.color,(c,live)=>{
+      z.color=c;
+      if(live){ shapeEls(z.id).forEach(el=>{ if(el.tagName==="polygon"){ el.setAttribute("fill",c); el.setAttribute("stroke",shade(c,-0.35)); } else if(el.classList.contains("shape-line")) el.setAttribute("stroke",c); }); return; }
+      renderShapes(); renderElements(); scheduleSave();
+    });
   }
+  /* Palette : clic sur une pastille = appliquer ; crayon = modifier cette couleur de la palette (sélecteur de
+     l'OS, aperçu en direct) ; « + » = ajouter une couleur. onPick(couleur, live) ; la palette est enregistrée
+     dans le projet. Modifier une pastille ne recolore pas les autres éléments qui l'utilisaient. */
   function colorPicker(container,name,current,onPick){
     container.innerHTML="";
-    COLORS.forEach(c=>{
-      const lab=document.createElement("label"); lab.title=c;
-      lab.innerHTML=`<input type="radio" name="${name}" ${current===c?"checked":""}><span class="sw" style="background:${c}"></span>`;
-      lab.querySelector("input").onchange=()=>onPick(c);
-      container.appendChild(lab);
+    const pal=palette();
+    pal.forEach((c,i)=>{
+      const sw=document.createElement("span"); sw.className="swatch"+(current===c?" on":""); sw.title=c;
+      sw.innerHTML=`<label><input type="radio" name="${name}" ${current===c?"checked":""}><span class="sw" style="background:${c}"></span></label>`
+                  +`<button type="button" class="edit" title="Modifier cette couleur" aria-label="Modifier cette couleur">${ICON("i-path")}</button><input type="color" class="cin" value="${c}" aria-hidden="true" tabindex="-1">`;
+      const radio=sw.querySelector("input[type=radio]"), cin=sw.querySelector(".cin"), dot=sw.querySelector(".sw");
+      radio.onchange=()=>{ container.querySelectorAll(".swatch").forEach(s=>s.classList.remove("on")); sw.classList.add("on"); onPick(c,false); };
+      sw.querySelector(".edit").onclick=ev=>{ ev.stopPropagation(); cin.click(); };
+      cin.addEventListener("input",()=>{ c=cin.value; pal[i]=c; dot.style.background=c; sw.title=c; radio.checked=true; onPick(c,true); });
+      cin.addEventListener("change",()=>{ c=cin.value; pal[i]=c; state.palette=pal.slice(); colorPicker(container,name,c,onPick); onPick(c,false); scheduleSave(); });
+      container.appendChild(sw);
     });
+    const add=document.createElement("button"); add.type="button"; add.className="addc"; add.title="Ajouter une couleur"; add.setAttribute("aria-label","Ajouter une couleur"); add.textContent="+";
+    const cadd=document.createElement("input"); cadd.type="color"; cadd.className="cin"; cadd.value=isHex(current)?current:"#4f7a3a"; cadd.setAttribute("aria-hidden","true"); cadd.tabIndex=-1;
+    add.onclick=()=>cadd.click();
+    cadd.addEventListener("input",()=>onPick(cadd.value,true));
+    cadd.addEventListener("change",()=>{ const v=cadd.value; if(!pal.includes(v)) state.palette=pal.concat([v]); colorPicker(container,name,v,onPick); onPick(v,false); scheduleSave(); });
+    const wrap=document.createElement("span"); wrap.className="swatch"; wrap.appendChild(add); wrap.appendChild(cadd);
+    container.appendChild(wrap);
   }
 
   // Saisie en direct dans la fiche plante
@@ -1395,6 +1423,7 @@
     state.paths=arr(d.paths); state.items=arr(d.items); state.itemTypes=arr(d.item_types);
     const migrated=state.plants.map(migratePlant).some(Boolean);
     state.scale=(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0) ? d.scale : null;
+    state.palette=Array.isArray(d.palette)&&d.palette.some(isHex) ? d.palette.filter(isHex) : null;
     state.imageUrl=d.image_path ? "/uploads/"+d.image_path : null;
     $("#clientName").value=state.client; $("#planDate").value=state.planDate;
     document.title="Permabondance — "+(state.client||"Plan de terrain")+(READONLY?" (lecture seule)":"");

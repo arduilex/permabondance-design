@@ -350,12 +350,21 @@ body.nopanel aside{display:none}
 .field .range-row .num-in{width:78px;flex:none;padding:6px 8px;text-align:right;font-family:var(--font-mono);font-size:12.5px}
 .range-row .unit{font-size:12px;color:var(--muted);width:22px;flex:none}
 .row2{display:flex;gap:10px}.row2>*{flex:1;min-width:0}
-.colorpick{display:flex;gap:8px;flex-wrap:wrap}
-.colorpick label{cursor:pointer}
-.colorpick input{position:absolute;opacity:0;width:0;height:0}
-.colorpick .sw{width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);display:inline-block}
+/* Palette : pastilles (clic = appliquer, crayon = modifier via le sélecteur de l'OS) + bouton rond « + » */
+.colorpick{display:flex;gap:9px;flex-wrap:wrap;align-items:center;padding:2px 0}
+.colorpick .swatch{position:relative;width:26px;height:26px}
+.colorpick label{cursor:pointer;display:block;width:26px;height:26px}
+.colorpick input[type=radio]{position:absolute;opacity:0;width:0;height:0}
+.colorpick .sw{width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);display:block}
 .colorpick input:checked + .sw{box-shadow:0 0 0 2px var(--leaf-dark)}
 .colorpick input:focus-visible + .sw{outline:2px solid var(--pollen-dark);outline-offset:2px}
+.colorpick .edit{position:absolute;right:-6px;bottom:-6px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);background:#fff;padding:0;display:none;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.colorpick .edit .ic{width:9px;height:9px;stroke-width:2.4}
+.colorpick .edit:hover{background:var(--leaf-tint);color:var(--leaf-dark)}
+.colorpick .swatch:hover .edit,.colorpick .swatch.on .edit{display:flex}
+.colorpick .addc{width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--muted);background:none;color:var(--muted);font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 0 1px}
+.colorpick .addc:hover{border-color:var(--leaf-dark);border-style:solid;color:var(--leaf-dark);background:var(--leaf-tint-2)}
+.colorpick .cin{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 .stats{background:var(--ground);border-radius:8px;padding:6px 10px;margin-bottom:11px}
 .stats .stat{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
 .stats .stat + .stat{border-top:1px solid var(--line)}
