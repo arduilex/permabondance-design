@@ -58,6 +58,14 @@ lecture seule, qui doit connaître tous les outils pour savoir quoi masquer.
       couleur ; palette enregistrée dans le projet.
 - [x] **14. Chemins sans étiquette sur la carte** (nom visible dans la liste et la fiche).
 
+- [x] **15. Export / import** — menu « Projet » en haut : export en fichier
+      `.permab.json` autonome (image du terrain et images d'items incluses,
+      nom daté `Nom_AAAA-MM-JJ_HHhMM`), import qui remplace le projet (confirmation
+      dans l'étiquette d'aide) ; « Importer un fichier… » dans la liste admin
+      crée un nouveau projet.
+- [x] **16. Champ date supprimé** de l'en-tête (la colonne `plan_date` reste en
+      base, non affichée, exportée pour l'ancien format).
+
 Décisions prises (validées le 13/09/2026) :
 - 13 : palette **par projet** (comme la bibliothèque d'items) ; modifier une pastille
   ne recolore pas les éléments qui l'utilisaient déjà (seul l'élément sélectionné change).

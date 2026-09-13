@@ -92,7 +92,9 @@
       <h2>Projets</h2>
       <span class="count" id="count"></span>
       <div class="spacer" style="flex:1"></div>
+      <button class="btn" id="btnImport" title="Créer un projet à partir d'un fichier .permab.json exporté">Importer un fichier…</button>
       <button class="btn primary" id="btnNew">+ Nouveau projet</button>
+      <input type="file" id="fileProj" accept=".json,application/json" style="display:none">
     </div>
     <div id="grid" class="grid"></div>
     <div id="empty" class="empty hidden">Aucun projet pour le moment.<br>Cliquez sur « Nouveau projet » pour commencer.</div>
@@ -101,6 +103,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/static/permab-io.js"></script>
 <script>
 (function(){
   "use strict";
@@ -178,6 +181,23 @@
   function disarm(){ document.querySelectorAll('[data-del][data-armed="1"]').forEach(b=>{ b.dataset.armed="0"; b.textContent=b.dataset.label||"Supprimer"; b.classList.remove("confirming"); b.title=""; }); }
   document.addEventListener("pointerdown",e=>{ if(!e.target.closest('[data-del][data-armed="1"]')) disarm(); },true);
   window.addEventListener("keydown",e=>{ if(e.key==="Escape") disarm(); });
+
+  // Import : nouveau projet créé à partir d'un fichier exporté (.permab.json)
+  $("#btnImport").onclick=()=>$("#fileProj").click();
+  $("#fileProj").onchange=async e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    let data;
+    try{ data=PermabIO.parseFile(await f.text()); }catch(err){ toast(err.message); return; }
+    $("#btnImport").disabled=true; toast("Import en cours…");
+    try{
+      const r=await api("/api/projects",{method:"POST",body:JSON.stringify({name:String(data.client||f.name.replace(/\.permab\.json$|\.json$/i,"")).trim()})});
+      if(r.status===401){ checkAuth(); return; }
+      if(!r.ok) throw new Error("Création du projet impossible.");
+      const { id }=await r.json();
+      await PermabIO.importInto(id,data,msg=>toast(msg));
+      location.href="/p/"+id;
+    }catch(err){ toast("Import impossible : "+(err.message||err)); $("#btnImport").disabled=false; loadProjects(); }
+  };
 
   $("#btnNew").onclick=async()=>{
     const name=prompt("Nom du nouveau projet (client / terrain) :","");

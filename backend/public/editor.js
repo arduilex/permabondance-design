@@ -95,7 +95,7 @@
      les autres intacts). L'échelle est enregistrée immédiatement ; le reste est différé de 1,1 s ;
      à la fermeture de la page, ce qui reste en attente part via sendBeacon. */
   let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSavedParts={};
-  function payload(){ return { name:state.client, plan_date:state.planDate, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette }; }
+  function payload(){ return { name:state.client, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette }; }
   function parts(){ const p=payload(), o={}; for(const k in p) o[k]=JSON.stringify(p[k]); return o; }
   // { body: champs modifiés, parts: état complet à mémoriser si l'envoi réussit } ou null si rien à enregistrer
   function pendingDiff(){
@@ -319,6 +319,19 @@
         return { html, actions };
       }
     },
+    // Import d'un fichier : confirmation puis progression dans l'étiquette d'aide (pas de popup)
+    import:{
+      noImage:true,
+      exit(){ if(!importing) pendingImport=null; },
+      hint(){
+        if(importError) return { html:`<span class="err">${esc(importError)}</span>`, actions:[{label:"Fermer",cancel:true,onClick:()=>{ importError=null; setTool("select"); }}] };
+        if(importing) return { html:`Import en cours — ${esc(importProgress)}` };
+        const d=pendingImport; if(!d) return null;
+        return { html:`« <b>${esc(d.data.client||d.file.name)}</b> » — ${esc(PermabIO.summary(d.data))}. Remplacer <b>tout</b> le contenu de ce projet ?`,
+                 actions:[{label:"Remplacer",onClick:runImport,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
+      },
+      onKey(e){ if(e.key==="Enter" && pendingImport && !importing){ e.preventDefault(); runImport(); return true; } return false; }
+    },
     calib:{
       shortcut:"e",
       enter(){ calibPts=[]; calibConfirm=isCal(); renderCalib(); },   // échelle déjà définie : demander confirmation avant de la refaire
@@ -343,7 +356,7 @@
   const RO_TOOLS=["select","ruler"]; // en lecture seule : navigation et mesures uniquement
   function setTool(name){
     if(!TOOLS[name]) return;
-    if(name!=="select" && !hasImage()) return;
+    if(name!=="select" && !hasImage() && !TOOLS[name].noImage) return;
     if(READONLY && !RO_TOOLS.includes(name)) return;
     if(name===tool) return;
     const prev=TOOLS[tool]; if(prev.exit) prev.exit();
@@ -394,6 +407,7 @@
     if(e.key===" " && !typing){ e.preventDefault(); if(!spaceHeld){ spaceHeld=true; vp.classList.add("spacepan"); } return; }
     if(e.key==="Escape"){
       if(armed){ disarm(); return; }
+      if(importing) return;
       if(typing){ t.blur(); return; }
       if(tool!=="select") setTool("select"); else if(sel.kind) clearSel();
       return;
@@ -1348,7 +1362,42 @@
 
   /* ---------- Métadonnées ---------- */
   $("#clientName").oninput=e=>{ state.client=e.target.value; document.title="Permabondance — "+(state.client||"Plan de terrain"); scheduleSave(); };
-  $("#planDate").onchange=e=>{ state.planDate=e.target.value; scheduleSave(); };
+
+  /* ==========================================================================
+     Menu Projet : export (fichier autonome, version hors ligne) / import (remplace le projet)
+     ========================================================================== */
+  let pendingImport=null, importing=false, importProgress="", importError=null;
+  async function exportProject(){
+    flashStatus("Préparation du fichier…",8000);
+    try{
+      const { blob, filename }=await PermabIO.buildExport(state);
+      PermabIO.download(blob,filename);
+      flashStatus("Fichier exporté ✓",2500);
+    }catch(err){ flashStatus("",0); alert("Export impossible : "+(err.message||err)); }
+  }
+  $("#fileProj").onchange=async e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f) return;
+    let data;
+    try{ data=PermabIO.parseFile(await f.text()); }catch(err){ importError=err.message; setTool("import"); updateHint(); return; }
+    pendingImport={ data, file:f }; importError=null;
+    setTool("import"); updateHint();
+  };
+  async function runImport(){
+    const d=pendingImport; if(!d || importing) return;
+    importing=true; importProgress="lecture du fichier…"; updateHint();
+    try{
+      // les images d'items du projet remplacé ne servent plus
+      for(const t of state.itemTypes){ const file=String(t.image||"").split("/").pop(); if(file) fetch(API+"/assets/"+encodeURIComponent(file),{method:"DELETE"}).catch(()=>{}); }
+      await PermabIO.importInto(PID,d.data,msg=>{ importProgress=msg; updateHint(); });
+      lastSavedParts=parts(); // rien à renvoyer : on recharge sur le nouvel état
+      location.reload();
+    }catch(err){ importing=false; importError=err.message||String(err); updateHint(); }
+  }
+  const fileMenu=$("#fileMenu"), btnFile=$("#btnFile");
+  function toggleFile(on){ fileMenu.classList.toggle("on",on); btnFile.setAttribute("aria-expanded",on?"true":"false"); }
+  btnFile.onclick=e=>{ e.stopPropagation(); toggleShare(false); toggleFile(!fileMenu.classList.contains("on")); };
+  document.addEventListener("click",e=>{ if(!e.target.closest("#fileWrap")) toggleFile(false); });
+  fileMenu.querySelectorAll("[data-file]").forEach(b=>b.onclick=()=>{ toggleFile(false); if(b.dataset.file==="export") exportProject(); else if(!READONLY) $("#fileProj").click(); });
 
   /* ==========================================================================
      Image du terrain
@@ -1382,7 +1431,7 @@
   /* ---------- Partage : lien d'édition (/p/<id>) ou de lecture seule (/v/<jeton>) ---------- */
   const shareMenu=$("#shareMenu"), btnShare=$("#btnShare");
   function toggleShare(on){ shareMenu.classList.toggle("on",on); btnShare.setAttribute("aria-expanded",on?"true":"false"); }
-  btnShare.onclick=e=>{ e.stopPropagation(); toggleShare(!shareMenu.classList.contains("on")); };
+  btnShare.onclick=e=>{ e.stopPropagation(); toggleFile(false); toggleShare(!shareMenu.classList.contains("on")); };
   document.addEventListener("click",e=>{ if(!e.target.closest("#shareWrap")) toggleShare(false); });
   shareMenu.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
     toggleShare(false);
@@ -1402,7 +1451,7 @@
     applySheetPref(); applyPanelPref(); applyVisibility();
     if(READONLY){
       document.body.classList.add("readonly");
-      $("#clientName").hidden=true; $("#planDate").hidden=true; $("#roMeta").hidden=false; $("#roBadge").hidden=false;
+      $("#clientName").hidden=true; $("#roMeta").hidden=false; $("#roBadge").hidden=false;
       $("#btnLoad2").hidden=true; $("#emptyText").textContent="Ce plan n'a pas encore d'image de terrain.";
       $("#sheetEmpty").textContent="Cliquez une plante ou un élément sur le plan, ou dans la liste ci-dessus, pour lire sa fiche.";
     }
@@ -1414,18 +1463,15 @@
       d=await r.json();
     }catch(_){ $("#bootLoader").textContent="Erreur de chargement."; return; }
 
-    state.client=d.name||""; state.planDate=d.plan_date||""; state.viewToken=d.view_token||null;
-    if(READONLY){
-      const dt=(()=>{ try{ return state.planDate?new Date(state.planDate).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):""; }catch(_){ return state.planDate; } })();
-      $("#roMeta").textContent=[state.client||"Plan de terrain",dt].filter(Boolean).join(" · ");
-    }
+    state.client=d.name||""; state.planDate=d.plan_date||""; state.viewToken=d.view_token||null; // planDate : conservée pour l'export (ancien format), plus affichée
+    if(READONLY) $("#roMeta").textContent=state.client||"Plan de terrain";
     state.plants=arr(d.plants); state.zones=arr(d.zones); state.ponds=arr(d.ponds); state.ditches=arr(d.ditches);
     state.paths=arr(d.paths); state.items=arr(d.items); state.itemTypes=arr(d.item_types);
     const migrated=state.plants.map(migratePlant).some(Boolean);
     state.scale=(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0) ? d.scale : null;
     state.palette=Array.isArray(d.palette)&&d.palette.some(isHex) ? d.palette.filter(isHex) : null;
     state.imageUrl=d.image_path ? "/uploads/"+d.image_path : null;
-    $("#clientName").value=state.client; $("#planDate").value=state.planDate;
+    $("#clientName").value=state.client;
     document.title="Permabondance — "+(state.client||"Plan de terrain")+(READONLY?" (lecture seule)":"");
 
     if(state.imageUrl) loadImageData(state.imageUrl); else render();

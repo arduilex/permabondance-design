@@ -88,7 +88,9 @@ header .spacer{flex:1}
 .ro-badge{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--leaf-deep);background:var(--pollen);border-radius:5px;padding:3px 7px;white-space:nowrap}
 body.readonly .rail .tool:not([data-tool="select"]):not([data-tool="ruler"]),body.readonly .rail hr{display:none}
 body.readonly .marker .handle,body.readonly #editLayer{display:none}
-body.readonly .cat-head .add,body.readonly .lib-add,body.readonly .lib-row .ib,body.readonly .save,body.readonly #shareWrap,body.readonly #btnBack,body.readonly #sheetActions{display:none}
+body.readonly .cat-head .add,body.readonly .lib-add,body.readonly .lib-row .ib,body.readonly .save,body.readonly #shareWrap,body.readonly #btnBack,body.readonly #sheetActions,body.readonly .edit-only{display:none}
+.stage[data-tool="import"] #viewport{cursor:grab}
+.tag-in .txt.err{color:var(--danger)}
 body.readonly .marker,body.readonly #zoneLayer .shape{cursor:pointer}
 .ro dl{margin:0}
 .ro dt{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:12px 0 3px}
@@ -379,7 +381,6 @@ body.nopanel aside{display:none}
 @media (max-width:860px){
   header{gap:6px;padding:0 10px}
   header .brand small{display:none}
-  header input.meta#planDate{display:none}
   header input.meta#clientName{flex:1;min-width:70px;width:auto!important}
   header .btn .lbl{display:none}
   header .btn{padding:0 9px}

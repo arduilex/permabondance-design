@@ -98,6 +98,11 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
 5. **Partager** → deux liens :
    - **lecture seule** (`/v/<jeton>`) pour les clients : consultation, fiches et règle, sans modification ;
    - **édition** (`/p/<id>`) : quiconque l'a peut modifier le plan.
+6. **Projet** → **Exporter** : fichier `Nom_AAAA-MM-JJ_HHhMM.permab.json` autonome (image du
+   terrain et images d'items incluses) pour une sauvegarde ou une version hors ligne ;
+   **Importer un fichier…** remplace tout le contenu du projet par celui du fichier (après
+   confirmation). Dans la liste des projets, « Importer un fichier… » crée un nouveau projet.
+   Les fichiers de l'ancienne version autonome sont acceptés.
 
 ## Développement local
 
@@ -174,5 +179,5 @@ design-app/
     ├── package.json
     ├── scripts/{hash-password.js, import-permab.js}
     ├── src/{server.js, db.js}   # API + migrations de schéma au démarrage
-    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur)}
+    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur), permab-io.js (export/import)}
 ```
