@@ -24,7 +24,6 @@
   <symbol id="i-item" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
-  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v7M9 15l3 3 3-3"/></symbol>
   <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -49,13 +48,6 @@
   <span class="save" id="saveStatus"><i></i><span class="txt"></span></span>
   <div class="spacer"></div>
   <button class="btn ghost" id="btnPanel" title="Afficher / masquer le panneau" aria-label="Afficher ou masquer le panneau"><svg class="ic"><use href="#i-panel"/></svg></button>
-  <div class="share-wrap" id="fileWrap">
-    <button class="btn ghost" id="btnFile" aria-haspopup="menu" aria-expanded="false" title="Exporter / importer le projet"><svg class="ic"><use href="#i-file"/></svg><span class="lbl">Projet</span></button>
-    <div class="share-menu" id="fileMenu" role="menu">
-      <button type="button" data-file="export" role="menuitem"><b>Exporter le projet</b><span>Fichier .permab.json avec les images : sauvegarde ou version hors ligne</span></button>
-      <button type="button" data-file="import" role="menuitem" class="edit-only"><b>Importer un fichier…</b><span>Remplace tout le contenu de ce projet par celui du fichier</span></button>
-    </div>
-  </div>
   <div class="share-wrap" id="shareWrap">
     <button class="btn ghost" id="btnShare" aria-haspopup="menu" aria-expanded="false" title="Partager le plan"><svg class="ic"><use href="#i-link"/></svg><span class="lbl">Partager</span></button>
     <div class="share-menu" id="shareMenu" role="menu">
@@ -155,7 +147,7 @@
         <div id="sheetPlant" hidden>
           <div class="field"><label>Nom</label><input data-f="nom" placeholder="ex. Pommier « Reine des Reinettes »"></div>
           <div class="row2">
-            <div class="field"><label>Date de plantation</label><input type="date" data-f="datePres"></div>
+            <div class="field"><label>Année de plantation</label><input data-f="annee" inputmode="numeric" maxlength="4" placeholder="AAAA" autocomplete="off"></div>
             <div class="field"><label>Type</label>
               <select data-f="type">
                 <option value="">—</option><option>Arbre fruitier</option><option>Arbre</option><option>Arbuste</option><option>Vivace</option><option>Annuelle</option><option>Grimpante</option><option>Aromatique</option><option>Couvre-sol</option><option>Autre</option>
@@ -221,8 +213,6 @@
 
 <input type="file" id="fileImg" accept="image/*" class="file-hidden">
 <input type="file" id="fileItem" accept="image/png,image/jpeg,image/webp" class="file-hidden">
-<input type="file" id="fileProj" accept=".json,application/json" class="file-hidden">
-<script src="/static/permab-io.js"></script>
 <script src="/static/editor.js"></script>
 </body>
 </html>

@@ -68,6 +68,25 @@ async function init() {
      WHERE projects.id = sub.id
   `);
   if (mig.rowCount) console.log(`[db] fiches plantes migrées (variete/libre → description) : ${mig.rowCount} projet(s)`);
+
+  // Date de plantation réduite à l'année : « datePres » (AAAA-MM-JJ) devient « annee » (AAAA).
+  // Rejouable : ne touche que les plantes qui portent encore « datePres » ; si la date ne
+  // contient pas d'année, une « annee » déjà présente est conservée.
+  const migYear = await pool.query(`
+    UPDATE projects SET plants = sub.new_plants
+      FROM (
+        SELECT id, jsonb_agg(
+          CASE WHEN p ? 'datePres' THEN
+            (p - 'datePres') || jsonb_build_object('annee',
+              COALESCE(substring(p->>'datePres' from '[0-9]{4}'), NULLIF(btrim(p->>'annee'), ''), ''))
+          ELSE p END ORDER BY ord) AS new_plants
+          FROM projects, jsonb_array_elements(plants) WITH ORDINALITY AS t(p, ord)
+         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(projects.plants) q WHERE q ? 'datePres')
+         GROUP BY id
+      ) sub
+     WHERE projects.id = sub.id
+  `);
+  if (migYear.rowCount) console.log(`[db] dates de plantation réduites à l'année (datePres → annee) : ${migYear.rowCount} projet(s)`);
   console.log("[db] prêt");
 }
 

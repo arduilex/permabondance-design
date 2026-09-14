@@ -7,7 +7,7 @@
 (function(){
   "use strict";
   const COLORS=["#4f7a3a","#c75d3a","#d9a521","#7b4fa3","#3a78c7","#c73a86","#2f9e8f","#8a8a8a"];
-  const FIELDS=["nom","datePres","type","typeAutre","description","recolte","conservation"];
+  const FIELDS=["nom","annee","type","typeAutre","description","recolte","conservation"];
   const DEFAULT_M=4; // diamètre de plante par défaut (m) quand l'échelle est connue
 
   // /p/<id> : édition (l'id est le jeton d'édition) · /v/<jeton> : lecture seule (lien client)
@@ -48,7 +48,7 @@
   function isHiddenCat(key){ return !!prefs.hidden[key]; }
 
   /* ---------- État ---------- */
-  let state={ client:"", planDate:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
+  let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
   // Palette du projet (copie : les modifications passent par state.palette) ; défaut = COLORS
   const isHex=c=>/^#[0-9a-f]{6}$/i.test(String(c||""));
   function palette(){ const p=Array.isArray(state.palette)?state.palette.filter(isHex):[]; return (p.length?p:COLORS).slice(); }
@@ -73,14 +73,12 @@
   function newId(){ return Date.now()+"_"+Math.random().toString(36).slice(2,6); }
   function nextNumIn(arr){ return arr.reduce((m,x)=>Math.max(m,x.num||0),0)+1; }
 
-  // Fiche v2 : « variete » → 1re ligne de « description », « libre » → fin (même règle que src/db.js).
-  // Filet de sécurité côté client pour un projet importé sans redémarrage du serveur.
+  // Date de plantation réduite à l'année : « datePres » (AAAA-MM-JJ) → « annee » (AAAA), même règle que src/db.js.
+  // Filet de sécurité côté client : un onglet resté ouvert pendant le déploiement peut encore renvoyer « datePres ».
   function migratePlant(p){
-    if(!("variete" in p) && !("libre" in p)) return false;
-    const v=String(p.variete||"").trim(), d=String(p.description||"").trim(), l=String(p.libre||"").trim();
-    const head=[v,d].filter(Boolean).join("\n");
-    p.description=[head,l].filter(Boolean).join("\n\n");
-    delete p.variete; delete p.libre;
+    if(!("datePres" in p)) return false;
+    p.annee=(String(p.datePres||"").match(/\d{4}/)||[])[0]||String(p.annee||"").trim();
+    delete p.datePres;
     return true;
   }
 
@@ -319,19 +317,6 @@
         return { html, actions };
       }
     },
-    // Import d'un fichier : confirmation puis progression dans l'étiquette d'aide (pas de popup)
-    import:{
-      noImage:true,
-      exit(){ if(!importing) pendingImport=null; },
-      hint(){
-        if(importError) return { html:`<span class="err">${esc(importError)}</span>`, actions:[{label:"Fermer",cancel:true,onClick:()=>{ importError=null; setTool("select"); }}] };
-        if(importing) return { html:`Import en cours — ${esc(importProgress)}` };
-        const d=pendingImport; if(!d) return null;
-        return { html:`« <b>${esc(d.data.client||d.file.name)}</b> » — ${esc(PermabIO.summary(d.data))}. Remplacer <b>tout</b> le contenu de ce projet ?`,
-                 actions:[{label:"Remplacer",onClick:runImport,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
-      },
-      onKey(e){ if(e.key==="Enter" && pendingImport && !importing){ e.preventDefault(); runImport(); return true; } return false; }
-    },
     calib:{
       shortcut:"e",
       enter(){ calibPts=[]; calibConfirm=isCal(); renderCalib(); },   // échelle déjà définie : demander confirmation avant de la refaire
@@ -356,7 +341,7 @@
   const RO_TOOLS=["select","ruler"]; // en lecture seule : navigation et mesures uniquement
   function setTool(name){
     if(!TOOLS[name]) return;
-    if(name!=="select" && !hasImage() && !TOOLS[name].noImage) return;
+    if(name!=="select" && !hasImage()) return;
     if(READONLY && !RO_TOOLS.includes(name)) return;
     if(name===tool) return;
     const prev=TOOLS[tool]; if(prev.exit) prev.exit();
@@ -1152,12 +1137,11 @@
     $("#sheetEmpty").hidden=!!(p||sh||it); ro.hidden=!(p||sh||it);
     $("#sheetPlant").hidden=true; $("#sheetShape").hidden=true; $("#sheetItem").hidden=true; $("#sheetActions").hidden=true;
     const row=(label,val,cls)=>val?`<dt>${label}</dt><dd${cls?` class="${cls}"`:""}>${esc(val)}</dd>`:"";
-    const fmtDate=s=>{ try{ return s?new Date(s).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):""; }catch(_){ return s; } };
     let html="";
     if(p){
       kind.hidden=false; kind.textContent="Plante"; kind.className="kind"; title.textContent=p.nom||"Plante sans nom";
       const type=p.type==="Autre"?p.typeAutre:p.type;
-      html=row("Type",type)+row("Date de plantation",fmtDate(p.datePres))+(isCal()?row("Diamètre",fmtNum((p.diam||defaultDiam())*state.scale.mPerPx,1)+" m","mono"):"")
+      html=row("Type",type)+row("Année de plantation",p.annee)+(isCal()?row("Diamètre",fmtNum((p.diam||defaultDiam())*state.scale.mPerPx,1)+" m","mono"):"")
           +row("Description",p.description)+row("Période de récolte",p.recolte)+row("Conservation",p.conservation);
     } else if(sh){
       const S=sh.S, z=sh.s;
@@ -1325,6 +1309,7 @@
       const m=world.querySelector('.marker[data-id="'+p.id+'"]'); if(m) m.style.opacity=p.opacity;
       scheduleSave(); return;
     }
+    if(f==="annee"){ const y=e.target.value.replace(/\D/g,"").slice(0,4); if(y!==e.target.value) e.target.value=y; } // chiffres seulement
     p[f]=e.target.value;
     if(f==="type"){ toggleAutre(p); renderElements(); scheduleSave(); return; }
     if(f==="nom"){ $("#sheetTitle").textContent=p.nom||"Plante sans nom"; renderLabels(); }
@@ -1374,42 +1359,6 @@
 
   /* ---------- Métadonnées ---------- */
   $("#clientName").oninput=e=>{ state.client=e.target.value; document.title="Permabondance — "+(state.client||"Plan de terrain"); scheduleSave(); };
-
-  /* ==========================================================================
-     Menu Projet : export (fichier autonome, version hors ligne) / import (remplace le projet)
-     ========================================================================== */
-  let pendingImport=null, importing=false, importProgress="", importError=null;
-  async function exportProject(){
-    flashStatus("Préparation du fichier…",8000);
-    try{
-      const { blob, filename }=await PermabIO.buildExport(state);
-      PermabIO.download(blob,filename);
-      flashStatus("Fichier exporté ✓",2500);
-    }catch(err){ flashStatus("",0); alert("Export impossible : "+(err.message||err)); }
-  }
-  $("#fileProj").onchange=async e=>{
-    const f=e.target.files[0]; e.target.value=""; if(!f) return;
-    let data;
-    try{ data=PermabIO.parseFile(await f.text()); }catch(err){ importError=err.message; setTool("import"); updateHint(); return; }
-    pendingImport={ data, file:f }; importError=null;
-    setTool("import"); updateHint();
-  };
-  async function runImport(){
-    const d=pendingImport; if(!d || importing) return;
-    importing=true; importProgress="lecture du fichier…"; updateHint();
-    try{
-      // les images d'items du projet remplacé ne servent plus
-      for(const t of state.itemTypes){ const file=String(t.image||"").split("/").pop(); if(file) fetch(API+"/assets/"+encodeURIComponent(file),{method:"DELETE"}).catch(()=>{}); }
-      await PermabIO.importInto(PID,d.data,msg=>{ importProgress=msg; updateHint(); });
-      lastSavedParts=parts(); // rien à renvoyer : on recharge sur le nouvel état
-      location.reload();
-    }catch(err){ importing=false; importError=err.message||String(err); updateHint(); }
-  }
-  const fileMenu=$("#fileMenu"), btnFile=$("#btnFile");
-  function toggleFile(on){ fileMenu.classList.toggle("on",on); btnFile.setAttribute("aria-expanded",on?"true":"false"); }
-  btnFile.onclick=e=>{ e.stopPropagation(); toggleShare(false); toggleFile(!fileMenu.classList.contains("on")); };
-  document.addEventListener("click",e=>{ if(!e.target.closest("#fileWrap")) toggleFile(false); });
-  fileMenu.querySelectorAll("[data-file]").forEach(b=>b.onclick=()=>{ toggleFile(false); if(b.dataset.file==="export") exportProject(); else if(!READONLY) $("#fileProj").click(); });
 
   /* ==========================================================================
      Image du terrain
@@ -1472,7 +1421,7 @@
   /* ---------- Partage : lien d'édition (/p/<id>) ou de lecture seule (/v/<jeton>) ---------- */
   const shareMenu=$("#shareMenu"), btnShare=$("#btnShare");
   function toggleShare(on){ shareMenu.classList.toggle("on",on); btnShare.setAttribute("aria-expanded",on?"true":"false"); }
-  btnShare.onclick=e=>{ e.stopPropagation(); toggleFile(false); toggleShare(!shareMenu.classList.contains("on")); };
+  btnShare.onclick=e=>{ e.stopPropagation(); toggleShare(!shareMenu.classList.contains("on")); };
   document.addEventListener("click",e=>{ if(!e.target.closest("#shareWrap")) toggleShare(false); });
   shareMenu.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
     toggleShare(false);
@@ -1504,7 +1453,7 @@
       d=await r.json();
     }catch(_){ $("#bootLoader").textContent="Erreur de chargement."; return; }
 
-    state.client=d.name||""; state.planDate=d.plan_date||""; state.viewToken=d.view_token||null; // planDate : conservée pour l'export (ancien format), plus affichée
+    state.client=d.name||""; state.viewToken=d.view_token||null;
     if(READONLY) $("#roMeta").textContent=state.client||"Plan de terrain";
     state.plants=arr(d.plants); state.zones=arr(d.zones); state.ponds=arr(d.ponds); state.ditches=arr(d.ditches);
     state.paths=arr(d.paths); state.items=arr(d.items); state.itemTypes=arr(d.item_types);

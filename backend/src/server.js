@@ -104,7 +104,7 @@ app.param("id", (req, res, next, id) => {
 // Liste de tous les projets — ADMIN uniquement
 app.get("/api/projects", requireAdmin, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, view_token, name, plan_date, image_path, created_at, updated_at,
+    `SELECT id, view_token, name, image_path, created_at, updated_at,
             jsonb_array_length(plants) AS n_plants,
             jsonb_array_length(zones)  AS n_zones
        FROM projects
@@ -143,17 +143,15 @@ const JSON_COLS = ["plants", "zones", "scale", "ponds", "ditches", "paths", "ite
 async function updateProject(req, res) {
   const b = req.body || {};
   const name = b.name === undefined ? null : String(b.name).slice(0, 200);
-  const planDate = b.plan_date === undefined ? null : String(b.plan_date).slice(0, 40);
   const jsonVals = JSON_COLS.map((c) => (b[c] === undefined ? null : JSON.stringify(b[c])));
-  const sets = JSON_COLS.map((c, i) => `${c} = COALESCE($${i + 4}::jsonb, ${c})`).join(",\n        ");
+  const sets = JSON_COLS.map((c, i) => `${c} = COALESCE($${i + 3}::jsonb, ${c})`).join(",\n        ");
   const { rowCount } = await pool.query(
     `UPDATE projects SET
         name      = COALESCE($2, name),
-        plan_date = COALESCE($3, plan_date),
         ${sets},
         updated_at = now()
       WHERE id = $1`,
-    [req.params.id, name, planDate, ...jsonVals]
+    [req.params.id, name, ...jsonVals]
   );
   if (!rowCount) return res.status(404).json({ error: "projet introuvable" });
   res.json({ ok: true });

@@ -102,11 +102,6 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
 5. **Partager** → deux liens :
    - **lecture seule** (`/v/<jeton>`) pour les clients : consultation, fiches et règle, sans modification ;
    - **édition** (`/p/<id>`) : quiconque l'a peut modifier le plan.
-6. **Projet** → **Exporter** : fichier `Nom_AAAA-MM-JJ_HHhMM.permab.json` autonome (image du
-   terrain et images d'items incluses) pour une sauvegarde ou une version hors ligne ;
-   **Importer un fichier…** remplace tout le contenu du projet par celui du fichier (après
-   confirmation). Dans la liste des projets, « Importer un fichier… » crée un nouveau projet.
-   Les fichiers de l'ancienne version autonome sont acceptés.
 
 ## Développement local
 
@@ -115,16 +110,6 @@ docker compose -f docker-compose.local.yml up -d --build    # http://localhost:3
 ```
 Pas de Traefik ni de `.env` ; `backend/public` et `backend/src` sont montés depuis le poste
 (HTML/CSS/JS visibles au rechargement, `restart design-app` après une modif de `src/`).
-
-## Importer un projet de l'ancienne version (fichier `.permab.json`)
-
-```bash
-docker compose run --rm -v "$PWD/backend/scripts:/app/scripts:ro" \
-  -v "$PWD/MonProjet.permab.json:/import/MonProjet.permab.json:ro" \
-  design-app node scripts/import-permab.js /import/MonProjet.permab.json
-```
-(ajoute `-f docker-compose.local.yml` après `docker compose` pour la stack locale ; le script
-affiche l'URL `/p/<id>` du projet créé).
 
 ---
 
@@ -181,7 +166,7 @@ design-app/
 └── backend/
     ├── Dockerfile
     ├── package.json
-    ├── scripts/{hash-password.js, import-permab.js}
+    ├── scripts/hash-password.js
     ├── src/{server.js, db.js}   # API + migrations de schéma au démarrage
-    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur), permab-io.js (export/import)}
+    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur)}
 ```

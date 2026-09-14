@@ -89,7 +89,6 @@ header .spacer{flex:1}
 body.readonly .rail .tool:not([data-tool="select"]):not([data-tool="ruler"]),body.readonly .rail hr{display:none}
 body.readonly .marker .handle,body.readonly #editLayer{display:none}
 body.readonly .cat-head .add,body.readonly .lib-add,body.readonly .lib-row .ib,body.readonly .save,body.readonly #shareWrap,body.readonly #btnBack,body.readonly #sheetActions,body.readonly .edit-only{display:none}
-.stage[data-tool="import"] #viewport{cursor:grab}
 .tag-in .txt.err{color:var(--danger)}
 body.readonly .marker,body.readonly #zoneLayer .shape{cursor:pointer}
 .ro dl{margin:0}
