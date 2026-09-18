@@ -150,7 +150,10 @@ main{flex:1;display:flex;min-height:0}
 .stage.lbl-plants .lblbox[data-kind="plant"]{display:none}
 .stage.lbl-zones .zlbl[data-kind="zone"]{display:none}
 .stage.lbl-water .zlbl[data-kind="pond"],.stage.lbl-water .zlbl[data-kind="ditch"]{display:none}
+.stage.lbl-paths .zlbl[data-kind="path"]{display:none}
 .stage.lbl-items .lblbox[data-kind="item"]{display:none}
+/* Étiquettes masquées : le survol révèle quand même le nom (plante ou item) */
+.stage.lbl-plants .lblbox[data-kind="plant"].hover,.stage.lbl-items .lblbox[data-kind="item"].hover{display:block}
 .stage.hide-plants .marker[data-kind="plant"],.stage.hide-plants .lblbox[data-kind="plant"]{display:none}
 .stage.hide-zones [data-kind="zone"]{display:none}
 .stage.hide-water [data-kind="pond"],.stage.hide-water [data-kind="ditch"]{display:none}
@@ -203,6 +206,7 @@ main{flex:1;display:flex;min-height:0}
 #zoneLayer .shape.hit.sel{stroke:rgba(242,193,78,.6)}
 #zoneLayer .shape-line{pointer-events:none}
 .zlbl.water{color:#e8f3ff}
+.zlbl.path{color:#f0e6d2;font-size:13px}
 #zoneLayer .vtx{fill:#fff;stroke:var(--leaf-dark);stroke-width:2}
 #zoneLayer .vtx.first{fill:var(--pollen)}
 #zoneLayer .draftline{fill:rgba(242,193,78,.18);stroke:var(--pollen);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}

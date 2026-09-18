@@ -40,6 +40,9 @@ async function init() {
   }
   // Palette de couleurs du projet (null = palette par défaut de l'éditeur)
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS palette JSONB`);
+  // Réglages d'affichage du plan : { hidden: { <catégorie>: 0 | 1 | 2 } }
+  // (0 = tout visible, 1 = étiquettes masquées, 2 = tout masqué). null = tout visible.
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS display JSONB`);
   // Jeton de lecture seule (lien client) ; l'id reste le jeton d'édition. Rempli pour les projets existants.
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_token TEXT UNIQUE`);
   const { rows: noToken } = await pool.query(`SELECT id FROM projects WHERE view_token IS NULL`);

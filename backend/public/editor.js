@@ -46,14 +46,15 @@
   };
   function catOfKind(kind){ for(const k in CATS){ if(CATS[k].kinds.includes(kind)) return k; } return null; }
   /* Visibilité d'une catégorie, en trois crans : 0 = tout visible · 1 = étiquettes masquées
-     · 2 = tout masqué. Les chemins n'ayant pas d'étiquette sur la carte, ils sautent le cran 1. */
-  function hasLabels(key){ return key!=="paths"; }
-  function catVis(key){ const v=Math.round(+prefs.hidden[key]||0); return v<0?0:(v>2?2:v); }
+     · 2 = tout masqué. Enregistrée dans le projet (colonne « display »), pas dans le
+     navigateur : on retrouve le même réglage en rouvrant le plan, d'où qu'on l'ouvre. */
+  function catVis(key){ const v=Math.round(+(state.display.hidden||{})[key]||0); return v<0?0:(v>2?2:v); }
   function isHiddenCat(key){ return catVis(key)===2; }
   function isHiddenLabels(key){ return catVis(key)>=1; }
 
   /* ---------- État ---------- */
-  let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
+  // display : réglages d'affichage propres au plan (visibilité par catégorie), enregistrés en base
+  let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, display:{hidden:{}}, viewToken:null };
   // Palette du projet (copie : les modifications passent par state.palette) ; défaut = COLORS
   const isHex=c=>/^#[0-9a-f]{6}$/i.test(String(c||""));
   function palette(){ const p=Array.isArray(state.palette)?state.palette.filter(isHex):[]; return (p.length?p:COLORS).slice(); }
@@ -103,7 +104,7 @@
      les autres intacts). L'échelle est enregistrée immédiatement ; le reste est différé de 1,1 s ;
      à la fermeture de la page, ce qui reste en attente part via sendBeacon. */
   let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSavedParts={};
-  function payload(){ return { name:state.client, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette }; }
+  function payload(){ return { name:state.client, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette, display:state.display }; }
   function parts(){ const p=payload(), o={}; for(const k in p) o[k]=JSON.stringify(p[k]); return o; }
   // { body: champs modifiés, parts: état complet à mémoriser si l'envoi réussit } ou null si rien à enregistrer
   function pendingDiff(){
@@ -482,14 +483,14 @@
     const c=catOfKind(sel.kind);
     if(c && isHiddenCat(c)) sel={kind:null,id:null};
   }
-  // L'œil parcourt les crans : tout visible -> étiquettes masquées -> tout masqué -> …
-  function toggleCat(key){
-    let v=(catVis(key)+1)%3;
-    if(v===1 && !hasLabels(key)) v=2;             // rien à masquer au cran intermédiaire
-    prefs.hidden[key]=v; savePrefs(); applyVisibility(); render();
+  function setCatVis(key,v){
+    state.display.hidden=Object.assign({},state.display.hidden,{[key]:v});
+    applyVisibility(); scheduleSave();
   }
+  // L'œil parcourt les crans : tout visible -> étiquettes masquées -> tout masqué -> …
+  function toggleCat(key){ setCatVis(key,(catVis(key)+1)%3); render(); }
   // Sélectionner un élément d'une catégorie masquée la réaffiche entièrement
-  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)){ prefs.hidden[c]=0; savePrefs(); applyVisibility(); } }
+  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)) setCatVis(c,0); }
 
   /* ---------- Sélection ---------- */
   function selectPlant(id){ ensureVisible("plant"); sel={kind:"plant",id}; openSheet(); render(); revealRow(); }
@@ -663,13 +664,12 @@
     labelLayer.innerHTML="";
     if(!hasImage()) return;
     for(const kind in SHAPES){
-      if(kind==="path") continue; // les chemins n'ont pas d'étiquette sur la carte (nom visible dans la liste et la fiche)
       const S=SHAPES[kind];
       state[S.coll].forEach(s=>{
         if(!s.cat || !s.points || s.points.length<2) return;
         const c=S.closed?centroid(s.points):midOfPath(s.points);
         const zl=document.createElement("div");
-        zl.className="zlbl"+(kind==="zone"?"":" water"); zl.dataset.kind=kind; zl.dataset.id=s.id;
+        zl.className="zlbl"+(kind==="zone"?"":kind==="path"?" path":" water"); zl.dataset.kind=kind; zl.dataset.id=s.id;
         zl.style.left=c.x+"%"; zl.style.top=c.y+"%"; zl.textContent=s.cat;
         labelLayer.appendChild(zl);
       });
@@ -695,13 +695,13 @@
      n'importe quelle autre étiquette disparaît donc ; entre deux « autres », la plus petite disparaît.
      Le survol force l'affichage. */
   let labelBoxes=[], hoverId=null;
-  const KIND_RANK={ zone:0, pond:0, ditch:1, item:2, plant:3 };
+  const KIND_RANK={ zone:0, pond:0, ditch:1, path:1, item:2, plant:3 };
   function measureLabels(){
     labelBoxes=[];
     const byId={};
     state.plants.forEach(p=>{ const dm=p.diam||defaultDiam(); byId[p.id]={x:p.x,y:p.y,boxH:dm,size:dm,kind:"plant"}; });
     state.items.forEach(it=>{ const d=itemDims(it); byId[it.id]={x:it.x,y:it.y,boxH:d.h,size:Math.max(d.w,d.h),kind:"item"}; });
-    for(const kind in SHAPES){ if(kind==="path") continue; const S=SHAPES[kind];
+    for(const kind in SHAPES){ const S=SHAPES[kind];
       state[S.coll].forEach(s=>{ if(!s.points||s.points.length<2) return; const c=S.closed?centroid(s.points):midOfPath(s.points);
         byId[s.id]={x:c.x,y:c.y,boxH:0,size:S.closed?polyMetrics(s.points).areaPx:pathLength(s.points),kind,centered:true}; });
     }
@@ -1066,9 +1066,7 @@
     head.innerHTML=`${ICON("i-chev").replace('class="ic"','class="ic chev"')}<span class="csw" style="background:${o.color}"></span><span class="cname">${o.name}</span><span class="ccount">${filterText?o.count+" / "+o.total:o.total}</span>`;
     // L'icône montre l'état courant, l'infobulle annonce ce que fera le clic
     const EYE_ICON=["i-eye","i-label-off","i-eye-off"];
-    const EYE_NEXT=hasLabels(o.key)
-      ? ["Masquer les étiquettes","Tout masquer sur le plan","Tout afficher"]
-      : ["Masquer sur le plan","","Afficher sur le plan"];
+    const EYE_NEXT=["Masquer les étiquettes","Tout masquer sur le plan","Tout afficher"];
     const eye=document.createElement("button"); eye.className="eye"; eye.type="button";
     eye.title=EYE_NEXT[vis]; eye.setAttribute("aria-label",eye.title);
     eye.innerHTML=ICON(EYE_ICON[vis]);
@@ -1624,6 +1622,11 @@
     const migrated=state.plants.map(migratePlant).some(Boolean);
     state.scale=(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0) ? d.scale : null;
     state.palette=Array.isArray(d.palette)&&d.palette.some(isHex) ? d.palette.filter(isHex) : null;
+    // Réglages d'affichage du plan. Plan d'avant cette colonne : on reprend une dernière fois
+    // ceux du navigateur, qui seront enregistrés en base au premier changement.
+    const disp=(d.display && typeof d.display==="object" && !Array.isArray(d.display)) ? d.display : null;
+    state.display={ hidden:Object.assign({}, disp ? (disp.hidden||{}) : prefs.hidden) };
+    applyVisibility();
     state.imageUrl=d.image_path ? "/uploads/"+d.image_path : null;
     $("#clientName").value=state.client;
     document.title="Permabondance — "+(state.client||"Plan de terrain")+(READONLY?" (lecture seule)":"");
