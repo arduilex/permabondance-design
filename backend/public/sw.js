@@ -195,10 +195,14 @@ async function handleRead(req, p) {
     if (res && res.ok) {
       const data = await res.clone().json();
       const row = (await getRow(key)) || { key };
-      // une écriture locale en attente prime sur ce que renvoie le serveur
-      row.data = row.pending ? mergeInto(data, row.data) : data;
+      const pending = !!row.pending;
+      // Une écriture locale en attente prime sur ce que renvoie le serveur : tant que la
+      // file n'est pas partie, le serveur ignore encore ces modifications. Renvoyer sa
+      // version afficherait un plan périmé, et la modification suivante repartirait de là.
+      row.data = pending ? mergeInto(data, row.data) : data;
       row.serverUpdatedAt = data.updated_at || null;
       await putRow(row);
+      if (pending) return json(row.data);
     }
     return res;
   } catch (_) {
