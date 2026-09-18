@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Permabondance — mes plans hors ligne</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#243a1c">
+<style>
+  :root{--ground:#eef0ea;--panel:#fff;--ink:#1f2a1f;--muted:#6a7566;--line:#d9ddd3;--leaf:#4f7a3a;--leaf-deep:#243a1c;--pollen:#f2c14e;--pollen-tint:#fff6dc;
+        --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--font-display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-ui);font-size:14px;color:var(--ink);background:var(--ground)}
+  header{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;background:var(--leaf-deep);color:#fff}
+  header .brand{font-family:var(--font-display);font-size:19px;display:flex;flex-direction:column;gap:2px;line-height:1}
+  header .brand small{font-family:var(--font-ui);font-size:10px;letter-spacing:.6px;text-transform:uppercase;opacity:.7}
+  header .spacer{flex:1}
+  header a{color:#dfe6d8;font-size:13px}
+  .wrap{max-width:900px;margin:0 auto;padding:22px 16px 60px}
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-family:var(--font-display);font-weight:400;font-size:22px;margin:0}
+  .btn{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.primary{background:var(--leaf);border-color:var(--leaf);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:6px}
+  .card:hover{border-color:var(--leaf)}
+  .card b{font-size:15px;font-weight:600}
+  .card .meta{color:var(--muted);font-size:12px}
+  .tag{display:inline-block;background:var(--pollen-tint);border:1px solid var(--pollen);border-radius:20px;padding:1px 9px;font-size:11px;font-weight:600;width:fit-content}
+  .empty{color:var(--muted);line-height:1.6;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:26px;text-align:center}
+  .new{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:16px}
+  .new input{flex:1;min-width:180px;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;font:inherit}
+  .note{margin-top:22px;color:var(--muted);font-size:12.5px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Permabondance<small>Plans hors ligne</small></div>
+  <div class="spacer"></div>
+  <a href="/" id="online" hidden>Tous mes projets →</a>
+</header>
+<div class="wrap">
+  <div class="bar"><h1>Mes plans hors ligne</h1></div>
+
+  <form class="new" id="newForm">
+    <input id="newName" placeholder="Nom du nouveau plan (client / terrain)" maxlength="200" autocomplete="off">
+    <button class="btn primary" type="submit">+ Nouveau plan</button>
+  </form>
+
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" hidden>Aucun plan disponible hors ligne pour l'instant.<br>
+    Ouvrez un plan une fois avec une connexion : il restera ensuite accessible ici, même sans réseau.</div>
+
+  <p class="note" id="note"></p>
+</div>
+<script>
+(function(){
+  "use strict";
+  const $=s=>document.querySelector(s);
+  function ask(msg){
+    if(!("serviceWorker" in navigator)) return Promise.resolve(null);
+    return navigator.serviceWorker.ready.then(reg=>new Promise(res=>{
+      const t=reg.active||navigator.serviceWorker.controller; if(!t) return res(null);
+      const ch=new MessageChannel(); const done=setTimeout(()=>res(null),15000);
+      ch.port1.onmessage=e=>{clearTimeout(done);res(e.data);};
+      t.postMessage(msg,[ch.port2]);
+    }));
+  }
+  const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  function when(iso){ if(!iso) return ""; try{ return "modifié le "+new Date(iso).toLocaleDateString("fr-FR",{day:"numeric",month:"long"})+" à "+new Date(iso).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } }
+
+  async function load(){
+    const r=await ask({type:"list"});
+    const list=(r&&r.projects)||[];
+    $("#empty").hidden=list.length>0;
+    $("#grid").innerHTML=list.map(p=>
+      '<a class="card" href="/p/'+encodeURIComponent(p.id)+'">'+
+      "<b>"+esc(p.name)+"</b>"+
+      '<span class="meta">'+esc(when(p.updated_at))+"</span>"+
+      (p.pending?'<span class="tag">'+p.pending+" modification"+(p.pending>1?"s":"")+" en attente</span>":"")+
+      (p.local?'<span class="tag">pas encore envoyé</span>':"")+
+      "</a>").join("");
+    $("#note").textContent=navigator.onLine
+      ? "Vous êtes connecté : les plans modifiés hors ligne sont envoyés automatiquement."
+      : "Vous êtes hors ligne. Vos modifications sont conservées ici et partiront au retour du réseau.";
+    $("#online").hidden=!navigator.onLine;
+  }
+
+  $("#newForm").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const name=$("#newName").value.trim()||"Nouveau plan";
+    const r=await ask({type:"create",name});
+    if(r&&r.id) location.href="/p/"+encodeURIComponent(r.id);
+  });
+
+  if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").then(load, load);
+  else load();
+  window.addEventListener("online",load);
+  window.addEventListener("offline",load);
+})();
+</script>
+</body>
+</html>

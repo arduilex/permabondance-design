@@ -1,0 +1,17 @@
+{
+  "name": "Permabondance — Plan de terrain",
+  "short_name": "Permabondance",
+  "description": "Éditeur de plans de terrain : plantes, zones et items sur une image satellite. Utilisable sans connexion.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef0ea",
+  "theme_color": "#243a1c",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

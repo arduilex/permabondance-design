@@ -145,16 +145,19 @@ async function updateProject(req, res) {
   const name = b.name === undefined ? null : String(b.name).slice(0, 200);
   const jsonVals = JSON_COLS.map((c) => (b[c] === undefined ? null : JSON.stringify(b[c])));
   const sets = JSON_COLS.map((c, i) => `${c} = COALESCE($${i + 3}::jsonb, ${c})`).join(",\n        ");
-  const { rowCount } = await pool.query(
+  // updated_at est renvoyé : le mode hors ligne s'en sert comme repère pour détecter
+  // qu'un plan a été modifié ailleurs pendant qu'il était édité sans réseau.
+  const { rows } = await pool.query(
     `UPDATE projects SET
         name      = COALESCE($2, name),
         ${sets},
         updated_at = now()
-      WHERE id = $1`,
+      WHERE id = $1
+      RETURNING updated_at`,
     [req.params.id, name, ...jsonVals]
   );
-  if (!rowCount) return res.status(404).json({ error: "projet introuvable" });
-  res.json({ ok: true });
+  if (!rows.length) return res.status(404).json({ error: "projet introuvable" });
+  res.json({ ok: true, updated_at: rows[0].updated_at });
 }
 app.patch("/api/projects/:id", updateProject);
 // Même mise à jour en POST : utilisée par navigator.sendBeacon à la fermeture de la page (PATCH impossible)
@@ -259,6 +262,21 @@ app.use(
   express.static(UPLOAD_DIR, { index: false, dotfiles: "deny", maxAge: "1h" })
 );
 app.use("/static", express.static(PUBLIC_DIR, { index: false }));
+
+/* ---------------- Mode hors ligne (PWA) ----------------
+   Le service worker doit être servi depuis la racine pour contrôler /p/<id>,
+   et sans cache : c'est par ce fichier que passe la désactivation d'urgence
+   (voir « Désactiver le mode hors ligne » dans le README). */
+app.get("/sw.js", (req, res) => {
+  res.set("Cache-Control", "no-cache, max-age=0");
+  res.type("application/javascript").sendFile(path.join(PUBLIC_DIR, "sw.js"));
+});
+app.get("/manifest.webmanifest", (req, res) =>
+  res.type("application/manifest+json").sendFile(path.join(PUBLIC_DIR, "manifest.webmanifest"))
+);
+// Accueil hors ligne : liste des plans disponibles sans réseau. Le service worker
+// le sert aussi à la place de « / » quand le serveur est injoignable.
+app.get("/hors-ligne", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "offline-home.html")));
 
 /* ---------------- Pages ---------------- */
 app.get("/healthz", (req, res) => res.json({ ok: true }));

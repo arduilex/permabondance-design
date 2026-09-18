@@ -108,6 +108,50 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
    confirmation dans l'étiquette d'aide). Seuls les fichiers exportés par l'application
    actuelle sont lus. En lecture seule, l'export reste possible, l'import non.
 
+## Mode hors ligne
+
+L'application fonctionne **sans connexion**, sans rien installer d'autre qu'un navigateur
+(Chrome ou Edge). Un *service worker* (`backend/public/sw.js`) se met en place tout seul à
+la première visite et s'intercale entre l'éditeur et le réseau.
+
+**Usage.** Ouvrir le plan une fois **en ligne** : la pastille « Disponible hors ligne »
+confirme qu'il est enregistré sur le poste. Ensuite, même sans réseau, la même adresse
+ouvre l'éditeur au lieu de l'erreur du navigateur. Les modifications sont conservées
+localement et l'en-tête affiche « N modifications en attente » ; elles partent seules dès
+que le serveur répond. L'icône d'installation de la barre d'adresse (facultative) donne une
+fenêtre et une icône dédiées, pratique pour quelqu'un qui n'a pas à taper une URL.
+
+- **Conflit** : si le plan a été modifié en ligne pendant l'édition hors ligne, un bandeau
+  demande laquelle des deux versions garder, en les résumant. Rien n'est écrasé avant la
+  réponse, et « Sauvegarder ma version » télécharge la version locale avant de l'abandonner.
+- **`/hors-ligne`** liste les plans disponibles sans réseau et permet d'en créer un nouveau.
+  C'est ce que le service worker affiche à la place de la liste des projets quand le serveur
+  est injoignable. Un plan créé hors ligne porte un identifiant provisoire (`local_…`) et
+  n'est créé en base qu'au retour du réseau — ce qui **demande d'être connecté en admin**.
+- **Limites** : la première visite doit être en ligne ; tout est lié à ce navigateur sur ce
+  poste ; effacer les données du site efface aussi les modifications pas encore envoyées.
+
+### Désactiver le mode hors ligne (secours)
+
+Le service worker s'installe chez tous les visiteurs. En cas de problème, remplacer le
+contenu de `backend/public/sw.js` par ces quelques lignes et pousser sur `main` : il se
+désinstalle de lui-même à la visite suivante, chez tout le monde.
+
+```js
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
+    await self.registration.unregister();
+    for (const k of await caches.keys()) await caches.delete(k);
+    for (const c of await self.clients.matchAll({ type: "window" })) c.navigate(c.url);
+  })());
+});
+```
+
+Les modifications encore en attente (IndexedDB) ne sont **pas** effacées par cette manœuvre.
+`/sw.js` est servi avec `Cache-Control: no-cache`, donc le remplacement est pris en compte
+dès la visite suivante.
+
 ## Développement local
 
 ```bash
@@ -173,5 +217,7 @@ design-app/
     ├── package.json
     ├── scripts/hash-password.js
     ├── src/{server.js, db.js}   # API + migrations de schéma au démarrage
-    └── public/{index.html (admin), editor.html + editor.css + editor.js (éditeur)}
+    └── public/
+        ├── index.html (admin), editor.html + editor.css + editor.js (éditeur)
+        └── sw.js + offline.js + offline-home.html + manifest.webmanifest   # mode hors ligne
 ```
