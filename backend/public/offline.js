@@ -52,17 +52,18 @@
   }
 
   /* ---------- État affiché ---------- */
-  // « navigator.onLine » ne dit que s'il existe une interface réseau, pas si le serveur
-  // répond : il ne sert qu'à l'affichage. Ce qui fait foi, c'est la file d'attente —
-  // elle ne se remplit que lorsqu'une écriture a réellement échoué.
+  /* Un seul message pendant qu'on travaille sans réseau, et il répond à la seule
+     question qui compte : « est-ce que mon travail est enregistré ? ». Pas de
+     compteur, pas d'état de synchronisation, pas de message de succès : quand tout
+     est parti, l'indicateur « Enregistré » de l'éditeur reprend simplement sa place.
+     Ni le nombre de modifications ni « navigator.onLine » n'apparaissent : ce dernier
+     dit seulement qu'il existe une interface réseau, pas que le serveur répond. */
   function render() {
-    // « Enregistré » (editor.js) parle de la copie locale : le montrer à côté de
-    // « en attente » se contredit à l'œil. Une seule information à la fois.
+    // Une seule information à la fois : « Enregistré » (editor.js) parle de la copie
+    // locale et se contredirait à l'œil avec le message hors ligne.
     const save = document.querySelector("#saveStatus");
     if (save) save.style.display = queued ? "none" : "";
-    if (syncing) setChip("sync", "Synchronisation…");
-    else if (queued) setChip("wait", queued + " modification" + (queued > 1 ? "s" : "") + " en attente");
-    else if (!navigator.onLine) setChip("wait", "Hors ligne");
+    if (queued) setChip("wait", "Modifications enregistrées hors ligne");
     else chip.hidden = true;
     renderBar();
   }
@@ -139,19 +140,19 @@
     const r = await ask({ type: "flush", force: !!force });
     syncing = false;
     if (r && r.conflict) { conflict = r.conflict; queued = (await ask({ type: "status" }) || {}).queued || queued; render(); return; }
-    if (r && r.ok) {
-      queued = 0; conflict = null;
-      flash("ok", r.uploaded ? "Synchronisé — rechargez pour les images" : "Synchronisé");
-      return;
-    }
+    if (r && r.ok) { queued = 0; conflict = null; render(); return; }   // succès : silence, l'éditeur reprend la main
     if (r && r.offline) { render(); return; }
-    if (r && r.needsAuth) {                                // plan créé hors ligne : la création en base demande la session admin
+    // Seule exception au silence : un plan créé hors ligne ne peut être créé en base
+    // que par un admin connecté. Sans ce message, il resterait indéfiniment local
+    // sans que personne ne comprenne pourquoi.
+    if (r && r.needsAuth) {
       await refresh();
       flash("err", "Connectez-vous pour envoyer ce nouveau plan", 8000);
       return;
     }
+    // Échec d'envoi : rien à annoncer, le message « enregistrées hors ligne » reste
+    // vrai et l'envoi est retenté tout seul.
     await refresh();
-    flash("err", "Échec de la synchronisation", 6000);
   }
 
   /* ---------- Préparation hors ligne ----------
@@ -159,7 +160,6 @@
      tout soit en cache avant la prochaine coupure. Sans réseau : sans effet. */
   async function prime() {
     if (!PID) return;
-    setChip("sync", "Préparation hors ligne…");
     try {
       const r = await fetch(API, { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
