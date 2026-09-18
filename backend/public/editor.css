@@ -280,7 +280,7 @@ aside{width:var(--aside-w);flex:none;background:var(--ground-deep);display:flex;
 body.nopanel aside{display:none}
 .panel{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .panel-elements{flex:1 1 auto;background:var(--ground);box-shadow:var(--shadow)}
-.panel-sheet{flex:0 1 auto;max-height:58%;background:var(--panel);box-shadow:var(--shadow-lg)}
+.panel-sheet{flex:0 1 auto;max-height:58%;background:var(--ground);box-shadow:var(--shadow-lg)}
 .panel-sheet.collapsed{flex:none;max-height:none}
 .panel-sheet.collapsed .pbody{display:none}
 .panel-sheet.collapsed .ph .chev{transform:rotate(-90deg)}
