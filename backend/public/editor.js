@@ -317,6 +317,19 @@
         return { html, actions };
       }
     },
+    // Import d'un fichier : confirmation puis progression dans l'étiquette d'aide (pas de popup)
+    import:{
+      noImage:true,
+      exit(){ if(!importing) pendingImport=null; },
+      hint(){
+        if(importError) return { html:`<span class="err">${esc(importError)}</span>`, actions:[{label:"Fermer",cancel:true,onClick:()=>{ importError=null; setTool("select"); }}] };
+        if(importing) return { html:`Import en cours — ${esc(importProgress)}` };
+        const d=pendingImport; if(!d) return null;
+        return { html:`« <b>${esc(d.data.client||d.file.name)}</b> » — ${esc(fileSummary(d.data))}. Remplacer <b>tout</b> le contenu de ce plan ?`,
+                 actions:[{label:"Remplacer",onClick:runImport,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
+      },
+      onKey(e){ if(e.key==="Enter" && pendingImport && !importing){ e.preventDefault(); runImport(); return true; } return false; }
+    },
     calib:{
       shortcut:"e",
       enter(){ calibPts=[]; calibConfirm=isCal(); renderCalib(); },   // échelle déjà définie : demander confirmation avant de la refaire
@@ -341,7 +354,7 @@
   const RO_TOOLS=["select","ruler"]; // en lecture seule : navigation et mesures uniquement
   function setTool(name){
     if(!TOOLS[name]) return;
-    if(name!=="select" && !hasImage()) return;
+    if(name!=="select" && !hasImage() && !TOOLS[name].noImage) return;
     if(READONLY && !RO_TOOLS.includes(name)) return;
     if(name===tool) return;
     const prev=TOOLS[tool]; if(prev.exit) prev.exit();
@@ -1361,6 +1374,133 @@
   $("#clientName").oninput=e=>{ state.client=e.target.value; document.title="Permabondance — "+(state.client||"Plan de terrain"); scheduleSave(); };
 
   /* ==========================================================================
+     Menu Fichier : export (fichier autonome, sauvegarde ou copie hors ligne)
+     et import (remplace tout le contenu du plan).
+
+     Le fichier .permab.json embarque l'image du terrain et les images d'items
+     en base64 : il se suffit à lui-même. Seul le format de l'application
+     actuelle (version 3) est accepté ; les fichiers de l'ancienne version
+     autonome ne sont volontairement plus lus.
+     ========================================================================== */
+  const FILE_FORMAT="permabondance-plan", FILE_VERSION=3;
+
+  async function toDataURL(url){
+    const r=await fetch(url); if(!r.ok) throw new Error("Image introuvable : "+url);
+    const b=await r.blob();
+    return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=()=>rej(new Error("Lecture de l'image impossible")); fr.readAsDataURL(b); });
+  }
+  function dataURLtoBlob(u){ return fetch(u).then(r=>r.blob()); }
+  function extOf(blob){ return { "image/png":"png", "image/jpeg":"jpg", "image/webp":"webp", "image/gif":"gif" }[blob.type]||"jpg"; }
+  function stamp(d){ const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}`; } // 2026-09-18_14h05
+  function safeName(s){ return (String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w-]+/g,"_").replace(/^_+|_+$/g,""))||"plan"; }
+
+  // Fichier autonome construit à partir de l'état courant de l'éditeur
+  async function buildExport(){
+    const itemTypes=await Promise.all(state.itemTypes.map(async t=>{
+      const o=Object.assign({},t);
+      o.imgData = t.image ? await toDataURL("/uploads/"+t.image).catch(()=>null) : null;
+      return o;
+    }));
+    const data={
+      format:FILE_FORMAT, version:FILE_VERSION, exportedAt:new Date().toISOString(),
+      client:state.client||"",
+      imgData: state.imageUrl ? await toDataURL(state.imageUrl) : null,
+      plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items,
+      itemTypes, scale:state.scale, palette:state.palette,
+    };
+    return { filename:safeName(state.client)+"_"+stamp(new Date())+".permab.json", blob:new Blob([JSON.stringify(data)],{type:"application/json"}) };
+  }
+  function download(blob,filename){
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+  }
+  function parseFile(text){
+    let d; try{ d=JSON.parse(text); }catch(_){ throw new Error("Ce fichier n'est pas un fichier de plan valide."); }
+    if(!d || typeof d!=="object" || d.format!==FILE_FORMAT || !Array.isArray(d.plants)) throw new Error("Ce fichier ne contient pas un plan Permabondance.");
+    if(!(+d.version>=FILE_VERSION)) throw new Error("Ce fichier a été exporté par une version antérieure de l'application : il n'est plus lisible.");
+    return d;
+  }
+  // « 12 plantes · 3 zones · image incluse »
+  function fileSummary(d){
+    const n=a=>Array.isArray(a)?a.length:0, pl=(k,s)=>`${k} ${s}${k>1?"s":""}`;
+    const parts=[pl(n(d.plants),"plante")];
+    if(n(d.zones)) parts.push(pl(n(d.zones),"zone"));
+    const w=n(d.ponds)+n(d.ditches); if(w) parts.push(`${w} eau`);
+    if(n(d.paths)) parts.push(pl(n(d.paths),"chemin"));
+    if(n(d.items)) parts.push(pl(n(d.items),"item"));
+    parts.push(d.imgData?"image incluse":"sans image");
+    return parts.join(" · ");
+  }
+  // Envoie le contenu du fichier dans ce projet (remplace tout). say(texte) : progression.
+  async function importInto(d,say){
+    if(d.imgData){
+      say("Envoi de l'image du terrain…");
+      const blob=await dataURLtoBlob(d.imgData);
+      const fd=new FormData(); fd.append("image",blob,"plan."+extOf(blob));
+      const r=await fetch("/api/projects/"+encodeURIComponent(PID)+"/image",{method:"POST",body:fd});
+      if(!r.ok) throw new Error("Échec de l'envoi de l'image du terrain.");
+    }
+    const list=Array.isArray(d.itemTypes)?d.itemTypes:[];
+    const types=[];
+    for(let i=0;i<list.length;i++){
+      const t=Object.assign({},list[i]);
+      if(t.imgData){
+        say(`Envoi des images d'items (${i+1}/${list.length})…`);
+        const blob=await dataURLtoBlob(t.imgData);
+        const fd=new FormData(); fd.append("image",blob,"item."+extOf(blob));
+        const r=await fetch("/api/projects/"+encodeURIComponent(PID)+"/assets",{method:"POST",body:fd});
+        t.image = r.ok ? (await r.json()).image_path : null;
+      } else t.image=null; // une image du serveur d'origine n'est pas transférable : type ignoré
+      delete t.imgData;
+      if(t.image) types.push(t);
+    }
+    say("Enregistrement du plan…");
+    const body={
+      name:String(d.client||"").slice(0,200),
+      plants:arr(d.plants), zones:arr(d.zones), ponds:arr(d.ponds), ditches:arr(d.ditches), paths:arr(d.paths),
+      items:arr(d.items).filter(it=>types.some(t=>t.id===it.typeId)), item_types:types,
+      scale:(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0)?d.scale:null,
+      palette:Array.isArray(d.palette)?d.palette.filter(isHex):null,
+    };
+    const r=await fetch(API,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error("Échec de l'enregistrement du plan.");
+  }
+
+  let pendingImport=null, importing=false, importProgress="", importError=null;
+  async function exportProject(){
+    flashStatus("Préparation du fichier…",8000);
+    try{
+      const { blob, filename }=await buildExport();
+      download(blob,filename);
+      flashStatus("Fichier exporté ✓",2500);
+    }catch(err){ flashStatus("",0); alert("Export impossible : "+(err.message||err)); }
+  }
+  $("#fileProj").onchange=async e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f) return;
+    let data;
+    try{ data=parseFile(await f.text()); }catch(err){ importError=err.message; setTool("import"); updateHint(); return; }
+    pendingImport={ data, file:f }; importError=null;
+    setTool("import"); updateHint();
+  };
+  async function runImport(){
+    const d=pendingImport; if(!d || importing) return;
+    importing=true; importProgress="lecture du fichier…"; updateHint();
+    try{
+      // les images d'items du plan remplacé ne servent plus
+      for(const t of state.itemTypes){ const file=String(t.image||"").split("/").pop(); if(file) fetch("/api/projects/"+encodeURIComponent(PID)+"/assets/"+encodeURIComponent(file),{method:"DELETE"}).catch(()=>{}); }
+      await importInto(d.data,msg=>{ importProgress=msg; updateHint(); });
+      lastSavedParts=parts(); // rien à renvoyer : on recharge sur le nouvel état
+      location.reload();
+    }catch(err){ importing=false; importError=err.message||String(err); updateHint(); }
+  }
+  const fileMenu=$("#fileMenu"), btnFile=$("#btnFile");
+  function toggleFile(on){ fileMenu.classList.toggle("on",on); btnFile.setAttribute("aria-expanded",on?"true":"false"); }
+  btnFile.onclick=e=>{ e.stopPropagation(); toggleShare(false); toggleFile(!fileMenu.classList.contains("on")); };
+  document.addEventListener("click",e=>{ if(!e.target.closest("#fileWrap")) toggleFile(false); });
+  fileMenu.querySelectorAll("[data-file]").forEach(b=>b.onclick=()=>{ toggleFile(false); if(b.dataset.file==="export") exportProject(); else if(!READONLY) $("#fileProj").click(); });
+
+  /* ==========================================================================
      Image du terrain
      ========================================================================== */
   // Écran « pas d'image » (normal, ou après un échec de chargement)
@@ -1421,7 +1561,7 @@
   /* ---------- Partage : lien d'édition (/p/<id>) ou de lecture seule (/v/<jeton>) ---------- */
   const shareMenu=$("#shareMenu"), btnShare=$("#btnShare");
   function toggleShare(on){ shareMenu.classList.toggle("on",on); btnShare.setAttribute("aria-expanded",on?"true":"false"); }
-  btnShare.onclick=e=>{ e.stopPropagation(); toggleShare(!shareMenu.classList.contains("on")); };
+  btnShare.onclick=e=>{ e.stopPropagation(); toggleFile(false); toggleShare(!shareMenu.classList.contains("on")); };
   document.addEventListener("click",e=>{ if(!e.target.closest("#shareWrap")) toggleShare(false); });
   shareMenu.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
     toggleShare(false);

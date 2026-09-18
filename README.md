@@ -102,6 +102,11 @@ Au premier démarrage, Traefik obtient le certificat (quelques secondes). Ouvre 
 5. **Partager** → deux liens :
    - **lecture seule** (`/v/<jeton>`) pour les clients : consultation, fiches et règle, sans modification ;
    - **édition** (`/p/<id>`) : quiconque l'a peut modifier le plan.
+6. **Fichier** → **Exporter le plan** : fichier `Nom_AAAA-MM-JJ_HHhMM.permab.json` autonome
+   (image du terrain et images d'items incluses) pour une sauvegarde ou une copie hors ligne ;
+   **Importer un fichier…** remplace tout le contenu du plan par celui du fichier (après
+   confirmation dans l'étiquette d'aide). Seuls les fichiers exportés par l'application
+   actuelle sont lus. En lecture seule, l'export reste possible, l'import non.
 
 ## Développement local
 
