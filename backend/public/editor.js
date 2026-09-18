@@ -65,6 +65,7 @@
   let calibPts=[], pendingCalib=false, calibConfirm=false; // calibration d'échelle
   let rulerPts=[], rulerCursor=null, rulerDone=false; // règle de mesure
   let collapsedGroups={}, filterText="";   // panneau « Éléments »
+  let addMenu=null;                        // catégorie dont le « + » propose ses outils
   let prefs=loadPrefs();                   // préférences d'affichage (localStorage)
 
   function hasImage(){ return imgNatW>0; }
@@ -416,6 +417,7 @@
     if(e.key===" " && !typing){ e.preventDefault(); if(!spaceHeld){ spaceHeld=true; vp.classList.add("spacepan"); } return; }
     if(e.key==="Escape"){
       if(armed){ disarm(); return; }
+      if(addMenu){ addMenu=null; renderElements(); return; }
       if(importing) return;
       if(typing){ t.blur(); return; }
       if(tool!=="select") setTool("select"); else if(sel.kind) clearSel();
@@ -519,6 +521,10 @@
   }
   function disarm(){ if(armed){ armed.restore(); armed=null; } }
   document.addEventListener("pointerdown",e=>{ if(armed && !armed.btn.contains(e.target)) disarm(); },true);
+  // Le choix d'outil d'un « + » se referme dès qu'on clique ailleurs
+  document.addEventListener("pointerdown",e=>{
+    if(addMenu && !e.target.closest(".add-choices") && !e.target.closest(".cat-head .add")){ addMenu=null; renderElements(); }
+  },true);
   // Touche Suppr : arme le bouton Supprimer de la fiche ; une 2e pression confirme
   function requestDeleteByKey(){ const b=$("#sheetActions .btn.del"); if(b && !b.closest("[hidden]")) armConfirm(b,"Confirmer ?",deleteSelected); }
 
@@ -1075,11 +1081,26 @@
     (READONLY?[]:(o.adds||[])).forEach(a=>{
       const add=document.createElement("button"); add.className="add"+(a.icon?" tool-ic":""); add.type="button"; add.title=a.tip; add.setAttribute("aria-label",a.tip);
       add.innerHTML=ICON(a.icon||"i-plus"); add.disabled=!hasImage();
-      add.onclick=ev=>{ ev.stopPropagation(); setTool(a.tool); };
+      if(a.menu) add.setAttribute("aria-expanded", addMenu===o.key?"true":"false");
+      // « + » à plusieurs outils : le choix s'ouvre sous l'en-tête (et non en surimpression,
+      // que le défilement du panneau rognerait)
+      add.onclick=ev=>{ ev.stopPropagation(); if(a.menu){ addMenu=(addMenu===o.key?null:o.key); renderElements(); } else setTool(a.tool); };
       head.appendChild(add);
     });
     head.onclick=()=>{ prefs.cats[o.key]=!(prefs.cats[o.key]!==false); savePrefs(); renderElements(); };
     cat.appendChild(head);
+    const withMenu=(o.adds||[]).find(a=>a.menu);
+    if(withMenu && addMenu===o.key && !READONLY){
+      cat.classList.add("menu");
+      const box=document.createElement("div"); box.className="add-choices"; box.setAttribute("role","menu");
+      withMenu.menu.forEach(m=>{
+        const b=document.createElement("button"); b.type="button"; b.setAttribute("role","menuitem");
+        b.innerHTML=`${ICON(m.icon)}<span>${esc(m.label)}</span>`+(m.key?`<kbd>${esc(m.key)}</kbd>`:"");
+        b.onclick=ev=>{ ev.stopPropagation(); addMenu=null; setTool(m.tool); };
+        box.appendChild(b);
+      });
+      cat.appendChild(box);
+    }
     const body=document.createElement("div"); body.className="cat-body";
     if(o.count||o.forceBody) body.appendChild(o.body); else { const e=document.createElement("div"); e.className="cat-empty"; e.textContent=filterText?"Aucun résultat.":(hasImage()?o.empty:"Importez d'abord une image du terrain."); body.appendChild(e); }
     cat.appendChild(body);
@@ -1104,13 +1125,17 @@
     if(ponds.length && groupHead("Mares","#3a78c7",ponds.length,"w_ponds",wb)) ponds.forEach(z=>wb.appendChild(shapeRow("pond",z)));
     if(ditches.length && groupHead("Fossés","#2f6fb3",ditches.length,"w_ditches",wb)) ditches.forEach(z=>wb.appendChild(shapeRow("ditch",z)));
     root.appendChild(catBlock({ key:"water", name:CATS.water.name, color:CATS.water.color, count:ponds.length+ditches.length, total:state.ponds.length+state.ditches.length,
-      adds:[{tool:"pond",tip:"Dessiner une mare (M)",icon:"i-pond"},{tool:"ditch",tip:"Tracer un fossé (F)",icon:"i-ditch"}], body:wb,
-      empty:"Aucune mare ni fossé. Utilisez les outils Mare (M) et Fossé (F)." }));
+      // Un seul « + », comme les autres catégories : il propose les deux outils
+      adds:[{tip:"Ajouter une mare ou un fossé", menu:[
+        {tool:"pond", label:"Dessiner une mare", icon:"i-pond", key:"M"},
+        {tool:"ditch", label:"Tracer un fossé", icon:"i-ditch", key:"F"},
+      ]}], body:wb,
+      empty:"Aucune mare ni fossé. Utilisez le bouton + ou les outils Mare (M) et Fossé (F)." }));
 
     const paths=state.paths.filter(z=>matches((z.cat||"Chemin")+" "+(PATH_TYPES[z.type]?PATH_TYPES[z.type].label:""))).sort(byNum);
     const pb=document.createDocumentFragment(); paths.forEach(z=>pb.appendChild(shapeRow("path",z)));
     root.appendChild(catBlock({ key:"paths", name:CATS.paths.name, color:CATS.paths.color, count:paths.length, total:state.paths.length,
-      adds:[{tool:"path",tip:"Dessiner un chemin au crayon (C)",icon:"i-path"}], body:pb, empty:"Aucun chemin. Utilisez l'outil Crayon (C) : cliquer-glisser pour dessiner." }));
+      adds:[{tool:"path",tip:"Dessiner un chemin au crayon (C)"}], body:pb, empty:"Aucun chemin. Utilisez le bouton + ou l'outil Crayon (C) : cliquer-glisser pour dessiner." }));
 
     // Items : bibliothèque (types) puis exemplaires posés
     const ib=document.createDocumentFragment();

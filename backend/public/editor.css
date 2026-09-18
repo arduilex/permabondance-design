@@ -317,6 +317,14 @@ body.nopanel aside{display:none}
 .cat-head .add.tool-ic .ic{stroke-width:1.9}
 .cat-head .eye{color:var(--muted)}
 .cat-head .eye .ic{width:17px;height:17px}
+/* « + » à plusieurs outils : le choix s'insère sous l'en-tête (pas en surimpression : le panneau défile) */
+.cat.menu .cat-head{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.add-choices{display:flex;flex-direction:column;gap:2px;padding:5px;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 9px 9px}
+.cat.menu.open .add-choices{border-radius:0}
+.add-choices button{display:flex;align-items:center;gap:9px;padding:7px 8px;border:none;background:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--ink);text-align:left}
+.add-choices button:hover{background:var(--leaf-tint-2)}
+.add-choices .ic{width:16px;height:16px;color:var(--leaf-dark);flex:none}
+.add-choices kbd{margin-left:auto;font-family:var(--font-ui);font-size:9.5px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .cat.off .cat-head{background:var(--ground)}
 .cat.off .cat-head .cname,.cat.off .cat-head .ccount,.cat.off .cat-head .csw{opacity:.45}
 .cat.off .cat-head .eye{color:var(--danger)}
