@@ -1185,6 +1185,14 @@
      ========================================================================== */
   function openSheet(){ if(!prefs.sheet){ prefs.sheet=true; savePrefs(); applySheetPref(); } }
   function applySheetPref(){ $("#sheet").classList.toggle("collapsed",!prefs.sheet); }
+  /* La fiche est une carte à part, qui n'apparaît que sur sélection : sans rien de
+     sélectionné, la liste occupe toute la colonne. Sa couleur de bord dit à quelle
+     famille appartient l'élément inspecté. */
+  function showSheet(kind){
+    const s=$("#sheet");
+    s.hidden=!kind;
+    if(kind) s.dataset.cat=catOfKind(kind)||"";
+  }
   $("#sheetToggle").onclick=()=>{ prefs.sheet=!prefs.sheet; savePrefs(); applySheetPref(); };
   $("#sheetHead").addEventListener("dblclick",e=>{ if(e.target.closest("button")) return; $("#sheetToggle").click(); });
 
@@ -1193,6 +1201,7 @@
   // Fiche en lecture seule : les informations, sans champ de saisie
   function renderSheetRO(){
     const p=selPlant(), sh=selShape(), it=selItem();
+    showSheet(p?"plant":sh?sh.kind:it?"item":null);
     const ro=$("#sheetRO"), kind=$("#sheetKind"), title=$("#sheetTitle");
     $("#sheetEmpty").hidden=!!(p||sh||it); ro.hidden=!(p||sh||it);
     $("#sheetPlant").hidden=true; $("#sheetShape").hidden=true; $("#sheetItem").hidden=true; $("#sheetActions").hidden=true;
@@ -1222,6 +1231,7 @@
   function renderSheet(){
     if(READONLY) return renderSheetRO();
     const p=selPlant(), sh=selShape(), it=selItem();
+    showSheet(p?"plant":sh?sh.kind:it?"item":null);
     $("#sheetEmpty").hidden=!!(p||sh||it); $("#sheetPlant").hidden=!p; $("#sheetShape").hidden=!sh; $("#sheetItem").hidden=!it;
     const kind=$("#sheetKind"), title=$("#sheetTitle"), acts=$("#sheetActions"); acts.innerHTML=""; acts.hidden=!(p||sh||it);
     if(it){
