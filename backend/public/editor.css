@@ -146,7 +146,12 @@ main{flex:1;display:flex;min-height:0}
 #editLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
 
 /* Catégories masquées (œil du panneau) */
-.stage.hide-plants .marker,.stage.hide-plants .lblbox{display:none}
+/* Visibilité par catégorie : « lbl-… » masque les seules étiquettes, « hide-… » masque tout */
+.stage.lbl-plants .lblbox[data-kind="plant"]{display:none}
+.stage.lbl-zones .zlbl[data-kind="zone"]{display:none}
+.stage.lbl-water .zlbl[data-kind="pond"],.stage.lbl-water .zlbl[data-kind="ditch"]{display:none}
+.stage.lbl-items .lblbox[data-kind="item"]{display:none}
+.stage.hide-plants .marker[data-kind="plant"],.stage.hide-plants .lblbox[data-kind="plant"]{display:none}
 .stage.hide-zones [data-kind="zone"]{display:none}
 .stage.hide-water [data-kind="pond"],.stage.hide-water [data-kind="ditch"]{display:none}
 .stage.hide-paths [data-kind="path"]{display:none}
@@ -311,6 +316,7 @@ body.nopanel aside{display:none}
 .cat.off .cat-head{background:var(--ground)}
 .cat.off .cat-head .cname,.cat.off .cat-head .ccount,.cat.off .cat-head .csw{opacity:.45}
 .cat.off .cat-head .eye{color:var(--danger)}
+.cat.nolbl .cat-head .eye{color:var(--pollen-dark)}   /* cran intermédiaire : étiquettes masquées */
 .cat.off .cat-body .row,.cat.off .cat-body .grp-head{opacity:.5}
 .cat-body{display:none;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 9px 9px;padding:6px}
 .cat.open .cat-body{display:block}

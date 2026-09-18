@@ -45,7 +45,12 @@
     path: { coll:"paths",   closed:false, label:"Chemin",plural:"Chemins",noun:"le chemin",opacity:0.9,  color:()=>PATH_TYPES[pathType].color, catLabel:"Nom", catPh:"ex. Allée principale", width:()=>defaultWidth(PATH_TYPES[pathType].widthM) },
   };
   function catOfKind(kind){ for(const k in CATS){ if(CATS[k].kinds.includes(kind)) return k; } return null; }
-  function isHiddenCat(key){ return !!prefs.hidden[key]; }
+  /* Visibilité d'une catégorie, en trois crans : 0 = tout visible · 1 = étiquettes masquées
+     · 2 = tout masqué. Les chemins n'ayant pas d'étiquette sur la carte, ils sautent le cran 1. */
+  function hasLabels(key){ return key!=="paths"; }
+  function catVis(key){ const v=Math.round(+prefs.hidden[key]||0); return v<0?0:(v>2?2:v); }
+  function isHiddenCat(key){ return catVis(key)===2; }
+  function isHiddenLabels(key){ return catVis(key)>=1; }
 
   /* ---------- État ---------- */
   let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
@@ -84,7 +89,12 @@
 
   function loadPrefs(){
     const def={sheet:true,panel:true,cats:{},hidden:{}};
-    try{ const p=Object.assign(def, JSON.parse(localStorage.getItem("pb.editor")||"{}")); p.cats=p.cats||{}; p.hidden=p.hidden||{}; return p; }catch(_){ return def; }
+    try{
+      const p=Object.assign(def, JSON.parse(localStorage.getItem("pb.editor")||"{}")); p.cats=p.cats||{}; p.hidden=p.hidden||{};
+      // « hidden » était un booléen avant les trois crans de visibilité : true => tout masqué
+      for(const k in p.hidden) p.hidden[k] = p.hidden[k]===true ? 2 : (Math.round(+p.hidden[k])||0);
+      return p;
+    }catch(_){ return def; }
   }
   function savePrefs(){ try{ localStorage.setItem("pb.editor",JSON.stringify(prefs)); }catch(_){} }
 
@@ -464,13 +474,22 @@
 
   /* ---------- Visibilité par catégorie ---------- */
   function applyVisibility(){
-    for(const k in CATS) stage.classList.toggle("hide-"+k, isHiddenCat(k));
+    for(const k in CATS){
+      const v=catVis(k);
+      stage.classList.toggle("hide-"+k, v===2);   // tout masqué
+      stage.classList.toggle("lbl-"+k, v===1);    // étiquettes seules
+    }
     const c=catOfKind(sel.kind);
     if(c && isHiddenCat(c)) sel={kind:null,id:null};
   }
-  function toggleCat(key){ prefs.hidden[key]=!prefs.hidden[key]; savePrefs(); applyVisibility(); render(); }
-  // Sélectionner un élément d'une catégorie masquée la réaffiche
-  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)){ prefs.hidden[c]=false; savePrefs(); applyVisibility(); } }
+  // L'œil parcourt les crans : tout visible -> étiquettes masquées -> tout masqué -> …
+  function toggleCat(key){
+    let v=(catVis(key)+1)%3;
+    if(v===1 && !hasLabels(key)) v=2;             // rien à masquer au cran intermédiaire
+    prefs.hidden[key]=v; savePrefs(); applyVisibility(); render();
+  }
+  // Sélectionner un élément d'une catégorie masquée la réaffiche entièrement
+  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)){ prefs.hidden[c]=0; savePrefs(); applyVisibility(); } }
 
   /* ---------- Sélection ---------- */
   function selectPlant(id){ ensureVisible("plant"); sel={kind:"plant",id}; openSheet(); render(); revealRow(); }
@@ -688,7 +707,7 @@
     }
     labelLayer.querySelectorAll(".lblbox, .zlbl").forEach(el=>{
       const o=byId[el.dataset.id]; if(!o) return;
-      if(isHiddenCat(catOfKind(o.kind))) return; // catégorie masquée : n'occupe pas de place
+      if(isHiddenLabels(catOfKind(o.kind))) return; // étiquette masquée : n'occupe pas de place
       const r=(el.querySelector(".meta")||el).getBoundingClientRect(); // taille écran (contre-échelle => constante)
       labelBoxes.push({ el, id:el.dataset.id, kind:o.kind, centered:!!o.centered, x:o.x, y:o.y, boxH:o.boxH, size:o.size, w:r.width, h:r.height });
     });
@@ -1041,13 +1060,18 @@
     return frag;
   }
   function catBlock(o){
-    const open=!!filterText || prefs.cats[o.key]!==false, off=isHiddenCat(o.key);
-    const cat=document.createElement("div"); cat.className="cat"+(open?" open":"")+(off?" off":"");
+    const open=!!filterText || prefs.cats[o.key]!==false, vis=catVis(o.key), off=vis===2;
+    const cat=document.createElement("div"); cat.className="cat"+(open?" open":"")+(off?" off":"")+(vis===1?" nolbl":"");
     const head=document.createElement("div"); head.className="cat-head";
     head.innerHTML=`${ICON("i-chev").replace('class="ic"','class="ic chev"')}<span class="csw" style="background:${o.color}"></span><span class="cname">${o.name}</span><span class="ccount">${filterText?o.count+" / "+o.total:o.total}</span>`;
+    // L'icône montre l'état courant, l'infobulle annonce ce que fera le clic
+    const EYE_ICON=["i-eye","i-label-off","i-eye-off"];
+    const EYE_NEXT=hasLabels(o.key)
+      ? ["Masquer les étiquettes","Tout masquer sur le plan","Tout afficher"]
+      : ["Masquer sur le plan","","Afficher sur le plan"];
     const eye=document.createElement("button"); eye.className="eye"; eye.type="button";
-    eye.title=off?"Afficher sur le plan":"Masquer sur le plan"; eye.setAttribute("aria-label",eye.title); eye.setAttribute("aria-pressed",off?"true":"false");
-    eye.innerHTML=ICON(off?"i-eye-off":"i-eye");
+    eye.title=EYE_NEXT[vis]; eye.setAttribute("aria-label",eye.title);
+    eye.innerHTML=ICON(EYE_ICON[vis]);
     eye.onclick=ev=>{ ev.stopPropagation(); toggleCat(o.key); };
     head.appendChild(eye);
     (READONLY?[]:(o.adds||[])).forEach(a=>{
