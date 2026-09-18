@@ -1,7 +1,22 @@
+# ------------------------------------------------------------------
+# Stack déployée sur le VPS (derrière Traefik).
+#
+# Le MÊME fichier sert la production et la pré-production : ce qui les
+# distingue tient dans quatre variables du .env, qui n'existe pas dans git.
+# Sans ces variables, les valeurs par défaut ci-dessous sont exactement
+# celles de la production — un .env de prod inchangé continue donc de
+# fonctionner tel quel.
+#
+#   production      (~/design-app,     branche main) : aucune variable à ajouter
+#   pré-production  (~/design-preprod, branche dev)  : voir .env.preprod.example
+#
+# L'isolation des volumes vient du COMPOSE_PROJECT_NAME du .env : il préfixe
+# les noms des volumes, donc les deux bases ne se croisent jamais.
+# ------------------------------------------------------------------
 services:
   design-db:
     image: postgres:16-alpine
-    container_name: design-db
+    container_name: ${DB_CONTAINER:-design-db}
     restart: unless-stopped
     environment:
       POSTGRES_DB: design
@@ -19,15 +34,18 @@ services:
 
   design-app:
     build: ./backend
-    container_name: design-app
+    container_name: ${APP_CONTAINER:-design-app}
     restart: unless-stopped
     environment:
+      # « design-db » est le nom du SERVICE : il reste valable quel que soit le nom du conteneur
       DATABASE_URL: postgres://design:${POSTGRES_PASSWORD}@design-db:5432/design
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       SESSION_SECRET: ${SESSION_SECRET}
       UPLOAD_DIR: /data/uploads
       NODE_ENV: production
+      # Pré-production : bandeau « PRÉ-PRODUCTION » et refus d'indexation par les moteurs
+      PREPROD: ${PREPROD:-0}
     volumes:
       - design-uploads:/data/uploads
     depends_on:
@@ -39,10 +57,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
-      - "traefik.http.routers.design.rule=Host(`design.pepinieres-permabondance.fr`)"
-      - "traefik.http.routers.design.entrypoints=websecure"
-      - "traefik.http.routers.design.tls.certresolver=le"
-      - "traefik.http.services.design.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${ROUTER:-design}.rule=Host(`${APP_HOST:-design.pepinieres-permabondance.fr}`)"
+      - "traefik.http.routers.${ROUTER:-design}.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER:-design}.tls.certresolver=le"
+      - "traefik.http.services.${ROUTER:-design}.loadbalancer.server.port=3000"
 
 volumes:
   design-db-data:
