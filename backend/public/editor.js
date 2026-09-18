@@ -1186,13 +1186,8 @@
   function openSheet(){ if(!prefs.sheet){ prefs.sheet=true; savePrefs(); applySheetPref(); } }
   function applySheetPref(){ $("#sheet").classList.toggle("collapsed",!prefs.sheet); }
   /* La fiche est une carte à part, qui n'apparaît que sur sélection : sans rien de
-     sélectionné, la liste occupe toute la colonne. Sa couleur de bord dit à quelle
-     famille appartient l'élément inspecté. */
-  function showSheet(kind){
-    const s=$("#sheet");
-    s.hidden=!kind;
-    if(kind) s.dataset.cat=catOfKind(kind)||"";
-  }
+     sélectionné, la liste occupe toute la colonne. */
+  function showSheet(kind){ $("#sheet").hidden=!kind; }
   $("#sheetToggle").onclick=()=>{ prefs.sheet=!prefs.sheet; savePrefs(); applySheetPref(); };
   $("#sheetHead").addEventListener("dblclick",e=>{ if(e.target.closest("button")) return; $("#sheetToggle").click(); });
 
