@@ -162,6 +162,102 @@ Pas de Traefik ni de `.env` ; `backend/public` et `backend/src` sont montés dep
 
 ---
 
+## Pré-production (branche `dev`)
+
+Un second site, sur son propre domaine, qui suit la branche **`dev`** : tu valides là,
+puis tu ouvres une pull request `dev` → `main` et la version part en production.
+
+```
+GitHub  ──push dev──►  design-deployer-preprod  ──►  preprod.design…  (bac à sable)
+        ──merge PR──►  design-deployer          ──►  design…          (production)
+```
+
+C'est **le même `docker-compose.yml`** qui sert les deux : quatre variables du `.env`
+suffisent à en faire un second site. Les volumes sont préfixés par le nom de projet
+Docker, donc **les deux bases ne se croisent jamais**. Sans ces variables (cas de la prod),
+les valeurs par défaut sont exactement celles d'aujourd'hui.
+
+### Mise en place (une seule fois, sur le VPS)
+
+**1. DNS** — crée un enregistrement **A** `preprod.design.pepinieres-permabondance.fr`
+vers l'IP du VPS, et attends qu'il résolve (`dig +short preprod.design.…`). Sans ça,
+Let's Encrypt échouera à délivrer le certificat.
+
+**2. Cloner la branche `dev` dans un second dossier**
+
+```bash
+git clone -b dev https://github.com/arduilex/permabondance-design ~/design-preprod
+```
+
+**3. Copier le deployer** (il n'est pas dans le dépôt), puis le régler pour `dev` :
+
+```bash
+cp -r ~/design-app/auto-deploy ~/design-preprod/auto-deploy
+cat > ~/design-preprod/auto-deploy/.env <<'EOF'
+BRANCH=dev
+DEPLOYER_PROJECT=auto-deploy-preprod
+DEPLOYER_CONTAINER=design-deployer-preprod
+APP_PROJECT=design-preprod
+EOF
+```
+
+Le `docker-compose.yml` du deployer doit lire ces variables. S'il date d'avant
+(valeurs `main` / `design-deployer` en dur), remplace-le par la version de ce dépôt
+(`auto-deploy/docker-compose.yml` sur ton poste) — `deploy.sh` et le `Dockerfile`,
+eux, sont génériques et se copient tels quels.
+
+**4. Le `.env` de l'application**
+
+```bash
+cp ~/design-preprod/.env.preprod.example ~/design-preprod/.env
+nano ~/design-preprod/.env        # domaine + secrets PROPRES à la pré-prod
+```
+
+Génère le hash du mot de passe admin de pré-production (différent de la prod) :
+
+```bash
+cd ~/design-preprod
+docker compose run --rm --no-deps design-app node scripts/hash-password.js 'MotDePassePreprod'
+```
+
+**5. Démarrer**
+
+```bash
+cd ~/design-preprod/auto-deploy
+docker compose up -d --build
+docker logs -f design-deployer-preprod
+```
+
+Le certificat est demandé automatiquement par Traefik à la première visite :
+**rien à modifier dans la configuration de Traefik**, les labels du conteneur suffisent.
+
+### Au quotidien
+
+```bash
+git push origin dev          # la pré-prod se met à jour dans la minute
+# … tu valides sur preprod.design.pepinieres-permabondance.fr …
+gh pr create --base main --head dev && gh pr merge   # la prod suit dans la minute
+```
+
+### Bon à savoir
+
+- Les pages de pré-production portent un bandeau rouge **PRÉ-PRODUCTION** en bas à gauche,
+  renvoient `X-Robots-Tag: noindex, nofollow` et un `robots.txt` qui interdit tout :
+  aucun risque de la voir remonter dans Google, ni de la confondre avec la vraie.
+- La base de pré-production démarre **vide**. Pour travailler sur des données réalistes,
+  tu peux y recopier la prod (⚠ ce sont des données clients, sur un site moins protégé) :
+  ```bash
+  docker exec design-db pg_dump -U design design | docker exec -i design-db-preprod psql -U design design
+  docker run --rm -v design-app_design-uploads:/src:ro -v design-preprod_design-uploads:/dst alpine \
+    sh -c 'cp -a /src/. /dst/'
+  ```
+- Le mode hors ligne est lié au domaine : la pré-prod a son propre service worker et son
+  propre cache, totalement séparés de ceux de la production.
+- Pour tout arrêter : `cd ~/design-preprod/auto-deploy && docker compose down` puis
+  `cd ~/design-preprod && docker compose down` (ajoute `-v` pour effacer aussi sa base).
+
+---
+
 ## Exploitation
 
 ```bash
@@ -204,7 +300,8 @@ Pour repartir de zéro (efface base et images) : `docker compose down -v --rmi a
 ## Structure
 ```
 design-app/
-├── docker-compose.yml           # app + postgres (+ labels Traefik) — production
+├── docker-compose.yml           # app + postgres (+ labels Traefik) — production ET pré-production
+├── .env.preprod.example         # variables qui font d'un clone une pré-production
 ├── docker-compose.local.yml     # app + postgres sans Traefik — test sur le poste
 ├── auto-deploy/                 # deployer (polling git de main sur le VPS)
 ├── .env.example

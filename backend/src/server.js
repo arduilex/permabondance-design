@@ -18,7 +18,13 @@ const {
   UPLOAD_DIR = "/data/uploads",
   PORT = 3000,
   NODE_ENV = "production",
+  PREPROD = "0",
 } = process.env;
+
+// Pré-production : site de test servi sur un autre domaine, avec la même image que la prod.
+// Deux garde-fous : jamais référencé par les moteurs de recherche, et un bandeau visible
+// pour qu'on ne confonde jamais les deux sites.
+const IS_PREPROD = PREPROD === "1";
 
 if (!ADMIN_PASSWORD_HASH || !SESSION_SECRET) {
   console.error(
@@ -36,6 +42,13 @@ app.set("trust proxy", 1); // derrière Traefik
 
 // En-têtes de sécurité. CSP désactivée car l'éditeur utilise des styles/scripts inline.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+if (IS_PREPROD) {
+  app.use((req, res, next) => {
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
+  app.get("/robots.txt", (req, res) => res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+}
 app.use(express.json({ limit: "4mb" }));
 app.use(cookieParser());
 
@@ -276,14 +289,28 @@ app.get("/manifest.webmanifest", (req, res) =>
 );
 // Accueil hors ligne : liste des plans disponibles sans réseau. Le service worker
 // le sert aussi à la place de « / » quand le serveur est injoignable.
-app.get("/hors-ligne", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "offline-home.html")));
+app.get("/hors-ligne", (req, res) => sendPage(res, "offline-home.html"));
 
 /* ---------------- Pages ---------------- */
+// En pré-production, les pages portent un bandeau fixe : impossible de croire qu'on est en prod.
+const PREPROD_BANNER =
+  '<div style="position:fixed;left:0;bottom:0;z-index:99999;pointer-events:none;background:#b13a3a;' +
+  'color:#fff;font:600 11px/1 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
+  'padding:6px 10px;border-top-right-radius:8px;letter-spacing:.4px">PRÉ-PRODUCTION</div>';
+function sendPage(res, file) {
+  const full = path.join(PUBLIC_DIR, file);
+  if (!IS_PREPROD) return res.sendFile(full);
+  fs.readFile(full, "utf8", (err, html) => {
+    if (err) return res.sendStatus(404);
+    res.type("html").send(html.replace("</body>", PREPROD_BANNER + "</body>"));
+  });
+}
+
 app.get("/healthz", (req, res) => res.json({ ok: true }));
 app.get("/favicon.ico", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "favicon.ico")));
-app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
-app.get("/p/:id", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "editor.html")));
-app.get("/v/:token", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "editor.html"))); // lecture seule
+app.get("/", (req, res) => sendPage(res, "index.html"));
+app.get("/p/:id", (req, res) => sendPage(res, "editor.html"));
+app.get("/v/:token", (req, res) => sendPage(res, "editor.html")); // lecture seule
 
 /* ---------------- Erreurs ---------------- */
 app.use((err, req, res, next) => {
