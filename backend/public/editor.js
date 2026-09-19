@@ -246,9 +246,9 @@
       hint(){
         const n=draft.length;
         let html;
-        if(n<min) html=`Cliquez pour poser les points ${S.closed?"de":"du tracé de"} ${S.noun.replace(/^l[ae] /,"")} · <b>${n}</b>`;
-        else if(S.closed) html=`<b>${n}</b> points — cliquez le 1ᵉʳ point ou terminez`;
-        else html=`<b>${n}</b> points · ${fmtDist(pathLength(draft))} — continuez ou terminez`;
+        if(n<min) html=`Cliquez pour poser les points · <b>${n}</b>`;
+        else if(S.closed) html=`<b>${n}</b> points — fermez ou terminez`;
+        else html=`<b>${n}</b> points · ${fmtDist(pathLength(draft))}`;
         return { html, actions:[{label:"Terminer",disabled:n<min,onClick:finishDraft,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap · Retour arrière = retirer le dernier point"}] };
       }
     };
@@ -259,7 +259,7 @@
     plant:{
       shortcut:"p",
       onClick(e){ placeAt(e.clientX,e.clientY); },
-      hint(){ return { text:"Cliquez sur le plan pour poser la plante.", actions:[{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] }; }
+      hint(){ return { text:"Cliquez pour poser la plante", actions:[{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] }; }
     },
     zone: polyTool("zone","z"),
     pond: polyTool("pond","m"),
@@ -285,7 +285,7 @@
         openSheet(); render(); scheduleSave(); updateHint();
       },
       hint(){
-        return { html:"Dessinez le chemin au crayon (cliquer-glisser) · <span style='opacity:.65'>Espace + glisser : déplacer la carte</span>",
+        return { html:"Cliquez-glissez pour dessiner · <span style='opacity:.65'>Espace = déplacer</span>",
                  select:{ id:"pathTypeSel", value:pathType, options:Object.keys(PATH_TYPES).map(k=>[k,PATH_TYPES[k].label]), onChange:v=>{ pathType=v; } },
                  actions:[{label:"Terminer",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
       }
@@ -296,8 +296,8 @@
       enter(){ if(!itemType(itemTypeSel)) itemTypeSel=state.itemTypes.length?state.itemTypes[0].id:null; },
       onClick(e){ if(itemType(itemTypeSel)) placeItem(e.clientX,e.clientY); },
       hint(){
-        if(!state.itemTypes.length) return { text:"Aucun item dans la bibliothèque : importez d'abord une image (PNG).", actions:[{label:"Nouvel item…",onClick:()=>$("#fileItem").click()},{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
-        return { text:"Cliquez sur le plan pour poser :", select:{ id:"itemTypeSel", value:itemTypeSel, options:state.itemTypes.map(t=>[t.id,t.name]), onChange:v=>{ itemTypeSel=v; } },
+        if(!state.itemTypes.length) return { text:"Bibliothèque vide : importez une image PNG", actions:[{label:"Nouvel item…",onClick:()=>$("#fileItem").click()},{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
+        return { text:"Cliquez pour poser :", select:{ id:"itemTypeSel", value:itemTypeSel, options:state.itemTypes.map(t=>[t.id,t.name]), onChange:v=>{ itemTypeSel=v; } },
                  actions:[{label:"Nouvel item…",cancel:true,onClick:()=>$("#fileItem").click(),title:"Importer une image PNG"},{label:"Terminer",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
       }
     },
@@ -319,9 +319,9 @@
       hint(){
         const n=rulerPts.length, total=pathLength(rulerPts), segs=Math.max(0,n-1);
         let html;
-        if(n===0) html="Règle : cliquez le point de départ" + (isCal()?"":" <span style='opacity:.65'>(échelle non définie : mesures en pixels)</span>");
+        if(n===0) html="Cliquez le point de départ" + (isCal()?"":" <span style='opacity:.65'>(en pixels : échelle non définie)</span>");
         else if(n===1) html="Cliquez le point suivant";
-        else html=(rulerDone?"Mesure : ":"")+`<b>${fmtDist(total)}</b>`+(segs>1?` sur ${segs} segments`:"")+(rulerDone?"":" — cliquez pour prolonger");
+        else html=`<b>${fmtDist(total)}</b>`+(segs>1?` · ${segs} segments`:"");
         const actions=[];
         if(n>=2 && !rulerDone) actions.push({label:"Figer",onClick:()=>{ rulerDone=true; rulerCursor=null; renderRuler(); updateHint(); },title:"Entrée"});
         if(n>=1) actions.push({label:"Nouvelle mesure",cancel:true,onClick:()=>{ rulerPts=[]; rulerDone=false; renderRuler(); updateHint(); },title:"Retour arrière = retirer le dernier point"});
@@ -337,7 +337,7 @@
         if(importError) return { html:`<span class="err">${esc(importError)}</span>`, actions:[{label:"Fermer",cancel:true,onClick:()=>{ importError=null; setTool("select"); }}] };
         if(importing) return { html:`Import en cours — ${esc(importProgress)}` };
         const d=pendingImport; if(!d) return null;
-        return { html:`« <b>${esc(d.data.client||d.file.name)}</b> » — ${esc(fileSummary(d.data))}. Remplacer <b>tout</b> le contenu de ce plan ?`,
+        return { html:`« <b>${esc(d.data.client||d.file.name)}</b> » · ${esc(fileSummary(d.data))} — remplacer le contenu de ce plan ?`,
                  actions:[{label:"Remplacer",onClick:runImport,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
       },
       onKey(e){ if(e.key==="Enter" && pendingImport && !importing){ e.preventDefault(); runImport(); return true; } return false; }
@@ -353,11 +353,11 @@
         return false;
       },
       hint(){
-        if(calibConfirm) return { html:`L'échelle est déjà définie (<b>${fmtNum(state.scale.meters||0,1)} m</b> entre les 2 points de référence). La redéfinir ? <span style="opacity:.65">Les mesures en mètres seront recalculées.</span>`,
+        if(calibConfirm) return { html:`L'échelle est déjà définie. Êtes-vous sûr de la redéfinir ?`,
                                   actions:[{label:"Redéfinir",onClick:()=>{ calibConfirm=false; updateHint(); },title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select"),title:"Échap"}] };
         const n=calibPts.length;
-        if(n<2) return { text: n===0 ? "Échelle : cliquez un 1ᵉʳ point sur l'image." : "Cliquez le 2ᵉ point.", actions:[{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
-        return { text:"Distance réelle entre ces 2 points :", input:{id:"calibDist",value:(state.scale&&state.scale.meters)||"",suffix:"m"},
+        if(n<2) return { text: n===0 ? "Cliquez le 1ᵉʳ point" : "Cliquez le 2ᵉ point", actions:[{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
+        return { text:"Distance réelle :", input:{id:"calibDist",value:(state.scale&&state.scale.meters)||"",suffix:"m"},
                  actions:[{label:"Valider",onClick:applyCalibration,title:"Entrée"},{label:"Annuler",cancel:true,onClick:()=>setTool("select")}] };
       }
     }

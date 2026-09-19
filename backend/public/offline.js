@@ -83,8 +83,7 @@
     bar.hidden = false;
     bar.innerHTML =
       '<div class="pb-sb-txt"><b>Ce plan a été modifié en ligne ' + esc(when(c.serverAt)) + ".</b> " +
-      "Votre version hors ligne (" + esc(c.localSummary) + ") et la version en ligne (" + esc(c.serverSummary) + ") ont divergé. " +
-      "Laquelle garder ?</div>" +
+      "Garder votre version hors ligne (" + esc(c.localSummary) + ") ou celle en ligne (" + esc(c.serverSummary) + ") ?</div>" +
       '<div class="pb-sb-act">' +
       '<a href="#" class="pb-sb-dl">Sauvegarder ma version</a>' +
       '<button type="button" class="pb-sb-b1">Garder ma version hors ligne</button>' +
