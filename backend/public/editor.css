@@ -399,7 +399,10 @@ body.nopanel aside{display:none}
 
 /* Fiche */
 .sheet-empty{color:var(--muted);font-size:13px;text-align:center;padding:26px 10px;line-height:1.55}
-.sheet-actions{display:flex;justify-content:flex-end;gap:6px;margin:2px 0 12px}
+/* Alignées à gauche, sur le même bord que les libellés et les champs : à droite,
+   elles flottaient seules et cassaient la seule ligne verticale de la fiche.
+   Le filet les sépare du formulaire sans en faire un bloc de plus. */
+.sheet-actions{display:flex;justify-content:flex-start;gap:6px;margin:2px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
 .field{margin-bottom:11px}
 .field label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
 .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--ink);background:#fff;resize:vertical}
