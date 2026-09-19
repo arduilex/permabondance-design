@@ -190,7 +190,9 @@ main{flex:1;display:flex;min-height:0}
 
 /* Étiquettes (taille constante à l'écran) */
 .lblbox{position:absolute;transform:translate(-50%,-50%);pointer-events:none}
-.lblbox .meta{position:absolute;left:50%;top:86%;margin-top:2px;transform:translateX(-50%) scale(var(--inv,1));transform-origin:top center;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+/* L'étiquette se pose AU-DESSUS du marqueur : en dessous, elle masquait le terrain
+   que l'on vient regarder, et le curseur la recouvrait au survol. */
+.lblbox .meta{position:absolute;left:50%;bottom:86%;margin-bottom:2px;transform:translateX(-50%) scale(var(--inv,1));transform-origin:bottom center;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .lblbox.sel .meta{background:var(--leaf-dark)}
 /* Étiquettes intelligentes : masquée si elle en chevauche une autre, sauf sélection / survol */
 .lblbox.hide .meta,.zlbl.hide{visibility:hidden}

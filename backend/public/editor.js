@@ -727,7 +727,8 @@
     const placed=[];
     order.forEach(b=>{
       const cx=b.x/100*imgNatW*scale, cy=b.y/100*imgNatH*scale;
-      const top=b.centered ? cy-b.h/2 : cy+0.36*b.boxH*scale+2; // étiquette de forme centrée ; étiquette de marqueur sous le marqueur
+      // étiquette de forme centrée sur la forme ; étiquette de marqueur posée au-dessus de lui
+      const top=b.centered ? cy-b.h/2 : cy-0.36*b.boxH*scale-2-b.h;
       const rc={l:cx-b.w/2-3, t:top-2, r:cx+b.w/2+3, b:top+b.h+2};
       const hit=pri(b)>=0 && placed.some(q=>rc.l<q.r && rc.r>q.l && rc.t<q.b && rc.b>q.t);
       b.el.classList.toggle("hide",hit);
