@@ -5,6 +5,7 @@
    ========================================================================== */
 :root{
   --ground:#eef0ea;        /* fond des panneaux */
+  --ground-deep:#e3e7dd;   /* fond de la colonne de droite, sous les cartes */
   --panel:#ffffff;
   --ink:#1f2a1f;
   --muted:#6a7566;
@@ -26,7 +27,7 @@
   --shadow-lg:0 8px 28px rgba(20,30,15,.18);
   --radius:10px;
   --rail-w:52px;
-  --aside-w:360px;
+  --aside-w:376px;
   --header-h:52px;
   --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --font-display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
@@ -146,7 +147,15 @@ main{flex:1;display:flex;min-height:0}
 #editLayer{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
 
 /* Catégories masquées (œil du panneau) */
-.stage.hide-plants .marker,.stage.hide-plants .lblbox{display:none}
+/* Visibilité par catégorie : « lbl-… » masque les seules étiquettes, « hide-… » masque tout */
+.stage.lbl-plants .lblbox[data-kind="plant"]{display:none}
+.stage.lbl-zones .zlbl[data-kind="zone"]{display:none}
+.stage.lbl-water .zlbl[data-kind="pond"],.stage.lbl-water .zlbl[data-kind="ditch"]{display:none}
+.stage.lbl-paths .zlbl[data-kind="path"]{display:none}
+.stage.lbl-items .lblbox[data-kind="item"]{display:none}
+/* Étiquettes masquées : le survol révèle quand même le nom (plante ou item) */
+.stage.lbl-plants .lblbox[data-kind="plant"].hover,.stage.lbl-items .lblbox[data-kind="item"].hover{display:block}
+.stage.hide-plants .marker[data-kind="plant"],.stage.hide-plants .lblbox[data-kind="plant"]{display:none}
 .stage.hide-zones [data-kind="zone"]{display:none}
 .stage.hide-water [data-kind="pond"],.stage.hide-water [data-kind="ditch"]{display:none}
 .stage.hide-paths [data-kind="path"]{display:none}
@@ -198,6 +207,7 @@ main{flex:1;display:flex;min-height:0}
 #zoneLayer .shape.hit.sel{stroke:rgba(242,193,78,.6)}
 #zoneLayer .shape-line{pointer-events:none}
 .zlbl.water{color:#e8f3ff}
+.zlbl.path{color:#f0e6d2;font-size:13px}
 #zoneLayer .vtx{fill:#fff;stroke:var(--leaf-dark);stroke-width:2}
 #zoneLayer .vtx.first{fill:var(--pollen)}
 #zoneLayer .draftline{fill:rgba(242,193,78,.18);stroke:var(--pollen);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
@@ -262,15 +272,19 @@ main{flex:1;display:flex;min-height:0}
 /* --------------------------------------------------------------------------
    Panneau latéral : Éléments (haut) + Fiche (bas)
    -------------------------------------------------------------------------- */
-aside{width:var(--aside-w);flex:none;background:var(--ground);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+/* Colonne de droite : deux cartes posées sur un fond plus sourd, séparées par un vrai
+   intervalle. Elles n'ont pas le même statut — la liste est le meuble où l'on range,
+   la fiche est la surface de travail : plus claire et plus détachée. La fiche
+   n'existe que s'il y a une sélection. */
+aside{width:var(--aside-w);flex:none;background:var(--ground-deep);display:flex;flex-direction:column;min-height:0;padding:10px;gap:10px}
 body.nopanel aside{display:none}
-.panel{display:flex;flex-direction:column;min-height:0}
-.panel-elements{flex:1 1 50%}
-.panel-sheet{flex:0 1 auto;max-height:60%;border-top:1px solid var(--line);background:var(--panel)}
+.panel{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.panel-elements{flex:1 1 auto;background:var(--ground);box-shadow:var(--shadow)}
+.panel-sheet{flex:0 1 auto;max-height:58%;background:var(--ground);box-shadow:var(--shadow-lg)}
 .panel-sheet.collapsed{flex:none;max-height:none}
 .panel-sheet.collapsed .pbody{display:none}
 .panel-sheet.collapsed .ph .chev{transform:rotate(-90deg)}
-.ph{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;flex:none}
+.ph{display:flex;align-items:center;gap:8px;padding:10px 11px 8px;flex:none}
 .ph h2{font-family:var(--font-display);font-weight:400;font-size:15px;margin:0;letter-spacing:.2px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph .kind{flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--leaf-dark);background:var(--leaf-tint);border-radius:5px;padding:2px 6px;white-space:nowrap}
 .ph .kind.zone{color:#5a4a12;background:var(--pollen-tint)}
@@ -281,7 +295,7 @@ body.nopanel aside{display:none}
 .ph .ib:hover{background:var(--leaf-tint);color:var(--leaf-dark)}
 .ph .ib .ic{width:16px;height:16px}
 .ph .chev{transition:transform .15s}
-.pbody{flex:1;overflow-y:auto;min-height:0;padding:0 12px 14px}
+.pbody{flex:1;overflow-y:auto;min-height:0;padding:0 11px 12px}
 
 /* Filtre */
 .filter{position:relative;margin:0 12px 8px}
@@ -308,9 +322,18 @@ body.nopanel aside{display:none}
 .cat-head .add.tool-ic .ic{stroke-width:1.9}
 .cat-head .eye{color:var(--muted)}
 .cat-head .eye .ic{width:17px;height:17px}
+/* « + » à plusieurs outils : le choix s'insère sous l'en-tête (pas en surimpression : le panneau défile) */
+.cat.menu .cat-head{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.add-choices{display:flex;flex-direction:column;gap:2px;padding:5px;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 9px 9px}
+.cat.menu.open .add-choices{border-radius:0}
+.add-choices button{display:flex;align-items:center;gap:9px;padding:7px 8px;border:none;background:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--ink);text-align:left}
+.add-choices button:hover{background:var(--leaf-tint-2)}
+.add-choices .ic{width:16px;height:16px;color:var(--leaf-dark);flex:none}
+.add-choices kbd{margin-left:auto;font-family:var(--font-ui);font-size:9.5px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .cat.off .cat-head{background:var(--ground)}
 .cat.off .cat-head .cname,.cat.off .cat-head .ccount,.cat.off .cat-head .csw{opacity:.45}
 .cat.off .cat-head .eye{color:var(--danger)}
+.cat.nolbl .cat-head .eye{color:var(--pollen-dark)}   /* cran intermédiaire : étiquettes masquées */
 .cat.off .cat-body .row,.cat.off .cat-body .grp-head{opacity:.5}
 .cat-body{display:none;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 9px 9px;padding:6px}
 .cat.open .cat-body{display:block}

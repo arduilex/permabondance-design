@@ -45,10 +45,16 @@
     path: { coll:"paths",   closed:false, label:"Chemin",plural:"Chemins",noun:"le chemin",opacity:0.9,  color:()=>PATH_TYPES[pathType].color, catLabel:"Nom", catPh:"ex. Allée principale", width:()=>defaultWidth(PATH_TYPES[pathType].widthM) },
   };
   function catOfKind(kind){ for(const k in CATS){ if(CATS[k].kinds.includes(kind)) return k; } return null; }
-  function isHiddenCat(key){ return !!prefs.hidden[key]; }
+  /* Visibilité d'une catégorie, en trois crans : 0 = tout visible · 1 = étiquettes masquées
+     · 2 = tout masqué. Enregistrée dans le projet (colonne « display »), pas dans le
+     navigateur : on retrouve le même réglage en rouvrant le plan, d'où qu'on l'ouvre. */
+  function catVis(key){ const v=Math.round(+(state.display.hidden||{})[key]||0); return v<0?0:(v>2?2:v); }
+  function isHiddenCat(key){ return catVis(key)===2; }
+  function isHiddenLabels(key){ return catVis(key)>=1; }
 
   /* ---------- État ---------- */
-  let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, viewToken:null };
+  // display : réglages d'affichage propres au plan (visibilité par catégorie), enregistrés en base
+  let state={ client:"", imageUrl:null, plants:[], zones:[], ponds:[], ditches:[], paths:[], items:[], itemTypes:[], scale:null, palette:null, display:{hidden:{}}, viewToken:null };
   // Palette du projet (copie : les modifications passent par state.palette) ; défaut = COLORS
   const isHex=c=>/^#[0-9a-f]{6}$/i.test(String(c||""));
   function palette(){ const p=Array.isArray(state.palette)?state.palette.filter(isHex):[]; return (p.length?p:COLORS).slice(); }
@@ -59,6 +65,7 @@
   let calibPts=[], pendingCalib=false, calibConfirm=false; // calibration d'échelle
   let rulerPts=[], rulerCursor=null, rulerDone=false; // règle de mesure
   let collapsedGroups={}, filterText="";   // panneau « Éléments »
+  let addMenu=null;                        // catégorie dont le « + » propose ses outils
   let prefs=loadPrefs();                   // préférences d'affichage (localStorage)
 
   function hasImage(){ return imgNatW>0; }
@@ -84,7 +91,12 @@
 
   function loadPrefs(){
     const def={sheet:true,panel:true,cats:{},hidden:{}};
-    try{ const p=Object.assign(def, JSON.parse(localStorage.getItem("pb.editor")||"{}")); p.cats=p.cats||{}; p.hidden=p.hidden||{}; return p; }catch(_){ return def; }
+    try{
+      const p=Object.assign(def, JSON.parse(localStorage.getItem("pb.editor")||"{}")); p.cats=p.cats||{}; p.hidden=p.hidden||{};
+      // « hidden » était un booléen avant les trois crans de visibilité : true => tout masqué
+      for(const k in p.hidden) p.hidden[k] = p.hidden[k]===true ? 2 : (Math.round(+p.hidden[k])||0);
+      return p;
+    }catch(_){ return def; }
   }
   function savePrefs(){ try{ localStorage.setItem("pb.editor",JSON.stringify(prefs)); }catch(_){} }
 
@@ -93,7 +105,7 @@
      les autres intacts). L'échelle est enregistrée immédiatement ; le reste est différé de 1,1 s ;
      à la fermeture de la page, ce qui reste en attente part via sendBeacon. */
   let loaded=false, saveTimer=null, saving=false, dirtyAgain=false, lastSavedParts={};
-  function payload(){ return { name:state.client, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette }; }
+  function payload(){ return { name:state.client, plants:state.plants, zones:state.zones, ponds:state.ponds, ditches:state.ditches, paths:state.paths, items:state.items, item_types:state.itemTypes, scale:state.scale, palette:state.palette, display:state.display }; }
   function parts(){ const p=payload(), o={}; for(const k in p) o[k]=JSON.stringify(p[k]); return o; }
   // { body: champs modifiés, parts: état complet à mémoriser si l'envoi réussit } ou null si rien à enregistrer
   function pendingDiff(){
@@ -405,6 +417,7 @@
     if(e.key===" " && !typing){ e.preventDefault(); if(!spaceHeld){ spaceHeld=true; vp.classList.add("spacepan"); } return; }
     if(e.key==="Escape"){
       if(armed){ disarm(); return; }
+      if(addMenu){ addMenu=null; renderElements(); return; }
       if(importing) return;
       if(typing){ t.blur(); return; }
       if(tool!=="select") setTool("select"); else if(sel.kind) clearSel();
@@ -464,13 +477,22 @@
 
   /* ---------- Visibilité par catégorie ---------- */
   function applyVisibility(){
-    for(const k in CATS) stage.classList.toggle("hide-"+k, isHiddenCat(k));
+    for(const k in CATS){
+      const v=catVis(k);
+      stage.classList.toggle("hide-"+k, v===2);   // tout masqué
+      stage.classList.toggle("lbl-"+k, v===1);    // étiquettes seules
+    }
     const c=catOfKind(sel.kind);
     if(c && isHiddenCat(c)) sel={kind:null,id:null};
   }
-  function toggleCat(key){ prefs.hidden[key]=!prefs.hidden[key]; savePrefs(); applyVisibility(); render(); }
-  // Sélectionner un élément d'une catégorie masquée la réaffiche
-  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)){ prefs.hidden[c]=false; savePrefs(); applyVisibility(); } }
+  function setCatVis(key,v){
+    state.display.hidden=Object.assign({},state.display.hidden,{[key]:v});
+    applyVisibility(); scheduleSave();
+  }
+  // L'œil parcourt les crans : tout visible -> étiquettes masquées -> tout masqué -> …
+  function toggleCat(key){ setCatVis(key,(catVis(key)+1)%3); render(); }
+  // Sélectionner un élément d'une catégorie masquée la réaffiche entièrement
+  function ensureVisible(kind){ const c=catOfKind(kind); if(c && isHiddenCat(c)) setCatVis(c,0); }
 
   /* ---------- Sélection ---------- */
   function selectPlant(id){ ensureVisible("plant"); sel={kind:"plant",id}; openSheet(); render(); revealRow(); }
@@ -499,6 +521,10 @@
   }
   function disarm(){ if(armed){ armed.restore(); armed=null; } }
   document.addEventListener("pointerdown",e=>{ if(armed && !armed.btn.contains(e.target)) disarm(); },true);
+  // Le choix d'outil d'un « + » se referme dès qu'on clique ailleurs
+  document.addEventListener("pointerdown",e=>{
+    if(addMenu && !e.target.closest(".add-choices") && !e.target.closest(".cat-head .add")){ addMenu=null; renderElements(); }
+  },true);
   // Touche Suppr : arme le bouton Supprimer de la fiche ; une 2e pression confirme
   function requestDeleteByKey(){ const b=$("#sheetActions .btn.del"); if(b && !b.closest("[hidden]")) armConfirm(b,"Confirmer ?",deleteSelected); }
 
@@ -644,13 +670,12 @@
     labelLayer.innerHTML="";
     if(!hasImage()) return;
     for(const kind in SHAPES){
-      if(kind==="path") continue; // les chemins n'ont pas d'étiquette sur la carte (nom visible dans la liste et la fiche)
       const S=SHAPES[kind];
       state[S.coll].forEach(s=>{
         if(!s.cat || !s.points || s.points.length<2) return;
         const c=S.closed?centroid(s.points):midOfPath(s.points);
         const zl=document.createElement("div");
-        zl.className="zlbl"+(kind==="zone"?"":" water"); zl.dataset.kind=kind; zl.dataset.id=s.id;
+        zl.className="zlbl"+(kind==="zone"?"":kind==="path"?" path":" water"); zl.dataset.kind=kind; zl.dataset.id=s.id;
         zl.style.left=c.x+"%"; zl.style.top=c.y+"%"; zl.textContent=s.cat;
         labelLayer.appendChild(zl);
       });
@@ -676,19 +701,19 @@
      n'importe quelle autre étiquette disparaît donc ; entre deux « autres », la plus petite disparaît.
      Le survol force l'affichage. */
   let labelBoxes=[], hoverId=null;
-  const KIND_RANK={ zone:0, pond:0, ditch:1, item:2, plant:3 };
+  const KIND_RANK={ zone:0, pond:0, ditch:1, path:1, item:2, plant:3 };
   function measureLabels(){
     labelBoxes=[];
     const byId={};
     state.plants.forEach(p=>{ const dm=p.diam||defaultDiam(); byId[p.id]={x:p.x,y:p.y,boxH:dm,size:dm,kind:"plant"}; });
     state.items.forEach(it=>{ const d=itemDims(it); byId[it.id]={x:it.x,y:it.y,boxH:d.h,size:Math.max(d.w,d.h),kind:"item"}; });
-    for(const kind in SHAPES){ if(kind==="path") continue; const S=SHAPES[kind];
+    for(const kind in SHAPES){ const S=SHAPES[kind];
       state[S.coll].forEach(s=>{ if(!s.points||s.points.length<2) return; const c=S.closed?centroid(s.points):midOfPath(s.points);
         byId[s.id]={x:c.x,y:c.y,boxH:0,size:S.closed?polyMetrics(s.points).areaPx:pathLength(s.points),kind,centered:true}; });
     }
     labelLayer.querySelectorAll(".lblbox, .zlbl").forEach(el=>{
       const o=byId[el.dataset.id]; if(!o) return;
-      if(isHiddenCat(catOfKind(o.kind))) return; // catégorie masquée : n'occupe pas de place
+      if(isHiddenLabels(catOfKind(o.kind))) return; // étiquette masquée : n'occupe pas de place
       const r=(el.querySelector(".meta")||el).getBoundingClientRect(); // taille écran (contre-échelle => constante)
       labelBoxes.push({ el, id:el.dataset.id, kind:o.kind, centered:!!o.centered, x:o.x, y:o.y, boxH:o.boxH, size:o.size, w:r.width, h:r.height });
     });
@@ -1041,23 +1066,41 @@
     return frag;
   }
   function catBlock(o){
-    const open=!!filterText || prefs.cats[o.key]!==false, off=isHiddenCat(o.key);
-    const cat=document.createElement("div"); cat.className="cat"+(open?" open":"")+(off?" off":"");
+    const open=!!filterText || prefs.cats[o.key]!==false, vis=catVis(o.key), off=vis===2;
+    const cat=document.createElement("div"); cat.className="cat"+(open?" open":"")+(off?" off":"")+(vis===1?" nolbl":"");
     const head=document.createElement("div"); head.className="cat-head";
     head.innerHTML=`${ICON("i-chev").replace('class="ic"','class="ic chev"')}<span class="csw" style="background:${o.color}"></span><span class="cname">${o.name}</span><span class="ccount">${filterText?o.count+" / "+o.total:o.total}</span>`;
+    // L'icône montre l'état courant, l'infobulle annonce ce que fera le clic
+    const EYE_ICON=["i-eye","i-label-off","i-eye-off"];
+    const EYE_NEXT=["Masquer les étiquettes","Tout masquer sur le plan","Tout afficher"];
     const eye=document.createElement("button"); eye.className="eye"; eye.type="button";
-    eye.title=off?"Afficher sur le plan":"Masquer sur le plan"; eye.setAttribute("aria-label",eye.title); eye.setAttribute("aria-pressed",off?"true":"false");
-    eye.innerHTML=ICON(off?"i-eye-off":"i-eye");
+    eye.title=EYE_NEXT[vis]; eye.setAttribute("aria-label",eye.title);
+    eye.innerHTML=ICON(EYE_ICON[vis]);
     eye.onclick=ev=>{ ev.stopPropagation(); toggleCat(o.key); };
     head.appendChild(eye);
     (READONLY?[]:(o.adds||[])).forEach(a=>{
       const add=document.createElement("button"); add.className="add"+(a.icon?" tool-ic":""); add.type="button"; add.title=a.tip; add.setAttribute("aria-label",a.tip);
       add.innerHTML=ICON(a.icon||"i-plus"); add.disabled=!hasImage();
-      add.onclick=ev=>{ ev.stopPropagation(); setTool(a.tool); };
+      if(a.menu) add.setAttribute("aria-expanded", addMenu===o.key?"true":"false");
+      // « + » à plusieurs outils : le choix s'ouvre sous l'en-tête (et non en surimpression,
+      // que le défilement du panneau rognerait)
+      add.onclick=ev=>{ ev.stopPropagation(); if(a.menu){ addMenu=(addMenu===o.key?null:o.key); renderElements(); } else setTool(a.tool); };
       head.appendChild(add);
     });
     head.onclick=()=>{ prefs.cats[o.key]=!(prefs.cats[o.key]!==false); savePrefs(); renderElements(); };
     cat.appendChild(head);
+    const withMenu=(o.adds||[]).find(a=>a.menu);
+    if(withMenu && addMenu===o.key && !READONLY){
+      cat.classList.add("menu");
+      const box=document.createElement("div"); box.className="add-choices"; box.setAttribute("role","menu");
+      withMenu.menu.forEach(m=>{
+        const b=document.createElement("button"); b.type="button"; b.setAttribute("role","menuitem");
+        b.innerHTML=`${ICON(m.icon)}<span>${esc(m.label)}</span>`+(m.key?`<kbd>${esc(m.key)}</kbd>`:"");
+        b.onclick=ev=>{ ev.stopPropagation(); addMenu=null; setTool(m.tool); };
+        box.appendChild(b);
+      });
+      cat.appendChild(box);
+    }
     const body=document.createElement("div"); body.className="cat-body";
     if(o.count||o.forceBody) body.appendChild(o.body); else { const e=document.createElement("div"); e.className="cat-empty"; e.textContent=filterText?"Aucun résultat.":(hasImage()?o.empty:"Importez d'abord une image du terrain."); body.appendChild(e); }
     cat.appendChild(body);
@@ -1082,13 +1125,17 @@
     if(ponds.length && groupHead("Mares","#3a78c7",ponds.length,"w_ponds",wb)) ponds.forEach(z=>wb.appendChild(shapeRow("pond",z)));
     if(ditches.length && groupHead("Fossés","#2f6fb3",ditches.length,"w_ditches",wb)) ditches.forEach(z=>wb.appendChild(shapeRow("ditch",z)));
     root.appendChild(catBlock({ key:"water", name:CATS.water.name, color:CATS.water.color, count:ponds.length+ditches.length, total:state.ponds.length+state.ditches.length,
-      adds:[{tool:"pond",tip:"Dessiner une mare (M)",icon:"i-pond"},{tool:"ditch",tip:"Tracer un fossé (F)",icon:"i-ditch"}], body:wb,
-      empty:"Aucune mare ni fossé. Utilisez les outils Mare (M) et Fossé (F)." }));
+      // Un seul « + », comme les autres catégories : il propose les deux outils
+      adds:[{tip:"Ajouter une mare ou un fossé", menu:[
+        {tool:"pond", label:"Dessiner une mare", icon:"i-pond", key:"M"},
+        {tool:"ditch", label:"Tracer un fossé", icon:"i-ditch", key:"F"},
+      ]}], body:wb,
+      empty:"Aucune mare ni fossé. Utilisez le bouton + ou les outils Mare (M) et Fossé (F)." }));
 
     const paths=state.paths.filter(z=>matches((z.cat||"Chemin")+" "+(PATH_TYPES[z.type]?PATH_TYPES[z.type].label:""))).sort(byNum);
     const pb=document.createDocumentFragment(); paths.forEach(z=>pb.appendChild(shapeRow("path",z)));
     root.appendChild(catBlock({ key:"paths", name:CATS.paths.name, color:CATS.paths.color, count:paths.length, total:state.paths.length,
-      adds:[{tool:"path",tip:"Dessiner un chemin au crayon (C)",icon:"i-path"}], body:pb, empty:"Aucun chemin. Utilisez l'outil Crayon (C) : cliquer-glisser pour dessiner." }));
+      adds:[{tool:"path",tip:"Dessiner un chemin au crayon (C)"}], body:pb, empty:"Aucun chemin. Utilisez le bouton + ou l'outil Crayon (C) : cliquer-glisser pour dessiner." }));
 
     // Items : bibliothèque (types) puis exemplaires posés
     const ib=document.createDocumentFragment();
@@ -1138,6 +1185,9 @@
      ========================================================================== */
   function openSheet(){ if(!prefs.sheet){ prefs.sheet=true; savePrefs(); applySheetPref(); } }
   function applySheetPref(){ $("#sheet").classList.toggle("collapsed",!prefs.sheet); }
+  /* La fiche est une carte à part, qui n'apparaît que sur sélection : sans rien de
+     sélectionné, la liste occupe toute la colonne. */
+  function showSheet(kind){ $("#sheet").hidden=!kind; }
   $("#sheetToggle").onclick=()=>{ prefs.sheet=!prefs.sheet; savePrefs(); applySheetPref(); };
   $("#sheetHead").addEventListener("dblclick",e=>{ if(e.target.closest("button")) return; $("#sheetToggle").click(); });
 
@@ -1146,6 +1196,7 @@
   // Fiche en lecture seule : les informations, sans champ de saisie
   function renderSheetRO(){
     const p=selPlant(), sh=selShape(), it=selItem();
+    showSheet(p?"plant":sh?sh.kind:it?"item":null);
     const ro=$("#sheetRO"), kind=$("#sheetKind"), title=$("#sheetTitle");
     $("#sheetEmpty").hidden=!!(p||sh||it); ro.hidden=!(p||sh||it);
     $("#sheetPlant").hidden=true; $("#sheetShape").hidden=true; $("#sheetItem").hidden=true; $("#sheetActions").hidden=true;
@@ -1175,6 +1226,7 @@
   function renderSheet(){
     if(READONLY) return renderSheetRO();
     const p=selPlant(), sh=selShape(), it=selItem();
+    showSheet(p?"plant":sh?sh.kind:it?"item":null);
     $("#sheetEmpty").hidden=!!(p||sh||it); $("#sheetPlant").hidden=!p; $("#sheetShape").hidden=!sh; $("#sheetItem").hidden=!it;
     const kind=$("#sheetKind"), title=$("#sheetTitle"), acts=$("#sheetActions"); acts.innerHTML=""; acts.hidden=!(p||sh||it);
     if(it){
@@ -1600,6 +1652,11 @@
     const migrated=state.plants.map(migratePlant).some(Boolean);
     state.scale=(d.scale && typeof d.scale==="object" && d.scale.mPerPx>0) ? d.scale : null;
     state.palette=Array.isArray(d.palette)&&d.palette.some(isHex) ? d.palette.filter(isHex) : null;
+    // Réglages d'affichage du plan. Plan d'avant cette colonne : on reprend une dernière fois
+    // ceux du navigateur, qui seront enregistrés en base au premier changement.
+    const disp=(d.display && typeof d.display==="object" && !Array.isArray(d.display)) ? d.display : null;
+    state.display={ hidden:Object.assign({}, disp ? (disp.hidden||{}) : prefs.hidden) };
+    applyVisibility();
     state.imageUrl=d.image_path ? "/uploads/"+d.image_path : null;
     $("#clientName").value=state.client;
     document.title="Permabondance — "+(state.client||"Plan de terrain")+(READONLY?" (lecture seule)":"");
