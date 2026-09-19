@@ -130,6 +130,25 @@
   </div>
 
   <aside>
+    <section class="panel panel-elements">
+      <div class="ph">
+        <button class="ib" id="elemToggle" title="Agrandir / réduire la liste" aria-label="Agrandir ou réduire la liste"><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <h2>Éléments</h2>
+        <span class="spacer"></span>
+        <span id="elCount" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div class="filter" id="filterWrap">
+        <svg class="ic"><use href="#i-search"/></svg>
+        <input id="filter" placeholder="Filtrer par nom, type, catégorie…" aria-label="Filtrer les éléments">
+        <button class="clear" id="filterClear" title="Effacer le filtre" aria-label="Effacer le filtre">×</button>
+      </div>
+      <div class="pbody" id="elements"></div>
+    </section>
+
+    <div class="split" id="split" role="separator" aria-orientation="horizontal" tabindex="0"
+         title="Glisser pour partager la hauteur entre la fiche et les éléments"
+         aria-label="Partage de hauteur entre la fiche et les éléments"></div>
+
     <section class="panel panel-sheet" id="sheet">
       <div class="ph" id="sheetHead">
         <button class="ib" id="sheetToggle" title="Replier / déplier la fiche" aria-label="Replier ou déplier la fiche"><svg class="ic chev"><use href="#i-chev"/></svg></button>
@@ -138,7 +157,7 @@
       </div>
       <div class="pbody">
         <div class="sheet-actions" id="sheetActions" hidden></div>
-        <div id="sheetEmpty" class="sheet-empty">Sélectionnez un élément sur le plan, ou dans la liste ci-dessous.</div>
+        <div id="sheetEmpty" class="sheet-empty">Sélectionnez un élément sur le plan, ou dans la liste ci-dessus.</div>
         <div id="sheetRO" class="ro" hidden></div>
 
         <div id="sheetPlant" hidden>
@@ -204,20 +223,6 @@
           </div>
         </div>
       </div>
-    </section>
-
-    <section class="panel panel-elements">
-      <div class="ph">
-        <h2>Éléments</h2>
-        <span class="spacer"></span>
-        <span id="elCount" style="font-size:11px;color:var(--muted)"></span>
-      </div>
-      <div class="filter" id="filterWrap">
-        <svg class="ic"><use href="#i-search"/></svg>
-        <input id="filter" placeholder="Filtrer par nom, type, catégorie…" aria-label="Filtrer les éléments">
-        <button class="clear" id="filterClear" title="Effacer le filtre" aria-label="Effacer le filtre">×</button>
-      </div>
-      <div class="pbody" id="elements"></div>
     </section>
   </aside>
 </main>
