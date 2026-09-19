@@ -1635,7 +1635,7 @@
       document.body.classList.add("readonly");
       $("#clientName").hidden=true; $("#roMeta").hidden=false; $("#roBadge").hidden=false;
       $("#btnLoad2").hidden=true;
-      $("#sheetEmpty").textContent="Cliquez une plante ou un élément sur le plan, ou dans la liste ci-dessus, pour lire sa fiche.";
+      $("#sheetEmpty").textContent="Cliquez une plante ou un élément sur le plan, ou dans la liste ci-dessous, pour lire sa fiche.";
     }
     if(!PID){ $("#bootLoader").textContent="Projet introuvable."; return; }
     let d;
