@@ -727,7 +727,8 @@
     const placed=[];
     order.forEach(b=>{
       const cx=b.x/100*imgNatW*scale, cy=b.y/100*imgNatH*scale;
-      const top=b.centered ? cy-b.h/2 : cy+0.36*b.boxH*scale+2; // étiquette de forme centrée ; étiquette de marqueur sous le marqueur
+      // étiquette de forme centrée sur la forme ; étiquette de marqueur posée au-dessus de lui
+      const top=b.centered ? cy-b.h/2 : cy-0.36*b.boxH*scale-2-b.h;
       const rc={l:cx-b.w/2-3, t:top-2, r:cx+b.w/2+3, b:top+b.h+2};
       const hit=pri(b)>=0 && placed.some(q=>rc.l<q.r && rc.r>q.l && rc.t<q.b && rc.b>q.t);
       b.el.classList.toggle("hide",hit);
@@ -1184,10 +1185,44 @@
      Fiche (élément sélectionné)
      ========================================================================== */
   function openSheet(){ if(!prefs.sheet){ prefs.sheet=true; savePrefs(); applySheetPref(); } }
-  function applySheetPref(){ $("#sheet").classList.toggle("collapsed",!prefs.sheet); }
+  /* ---------- Partage de hauteur entre la fiche et la liste ----------
+     Une seule valeur (part de la liste, en bas) pilotée de deux façons : la poignée
+     la règle en continu, la flèche de la liste la cale sur deux tiers ou un tiers. */
+  const SPLIT_MIN=0.2, SPLIT_MAX=0.85, SPLIT_DEF=0.66;
+  const splitVal=()=>Math.min(SPLIT_MAX,Math.max(SPLIT_MIN, +prefs.split||SPLIT_DEF));
+  function applySplit(save){
+    const v=splitVal();
+    $("aside").style.setProperty("--elem-share",v);
+    $(".panel-elements").classList.toggle("small",v<0.5);
+    $("#split").setAttribute("aria-valuenow",Math.round(v*100));
+    if(save){ prefs.split=v; savePrefs(); }
+  }
+  function setSplit(v,save){ prefs.split=Math.min(SPLIT_MAX,Math.max(SPLIT_MIN,v)); applySplit(save); }
+  $("#elemToggle").onclick=()=>setSplit(splitVal()>=0.5?1/3:2/3,true);
+  (function(){
+    const h=$("#split");
+    h.addEventListener("pointerdown",e=>{
+      e.preventDefault(); h.setPointerCapture(e.pointerId); h.classList.add("on");
+      const r=$("aside").getBoundingClientRect(), pad=10, inner=r.height-2*pad;
+      // la liste est la carte du haut : sa part va du haut de la colonne jusqu'à la poignée
+      const move=ev=>{ if(inner>0) setSplit((ev.clientY-(r.top+pad))/inner,false); };
+      const up=ev=>{ h.releasePointerCapture(e.pointerId); h.classList.remove("on"); applySplit(true);
+        h.removeEventListener("pointermove",move); h.removeEventListener("pointerup",up); h.removeEventListener("pointercancel",up); };
+      h.addEventListener("pointermove",move); h.addEventListener("pointerup",up); h.addEventListener("pointercancel",up);
+    });
+    h.addEventListener("keydown",e=>{
+      const step=e.key==="ArrowUp"?-0.05:e.key==="ArrowDown"?0.05:0;   // la poignée monte = la liste rétrécit
+      if(!step) return;
+      e.preventDefault(); setSplit(splitVal()+step,true);
+    });
+  })();
+
+  function applySheetPref(){ $("#sheet").classList.toggle("collapsed",!prefs.sheet); showSplit(); }
+  // La poignée n'a de sens que si les deux cartes se partagent réellement la hauteur
+  function showSplit(){ $("#split").hidden = $("#sheet").hidden || !prefs.sheet; }
   /* La fiche est une carte à part, qui n'apparaît que sur sélection : sans rien de
      sélectionné, la liste occupe toute la colonne. */
-  function showSheet(kind){ $("#sheet").hidden=!kind; }
+  function showSheet(kind){ $("#sheet").hidden=!kind; showSplit(); }
   $("#sheetToggle").onclick=()=>{ prefs.sheet=!prefs.sheet; savePrefs(); applySheetPref(); };
   $("#sheetHead").addEventListener("dblclick",e=>{ if(e.target.closest("button")) return; $("#sheetToggle").click(); });
 
@@ -1630,7 +1665,7 @@
      ========================================================================== */
   const arr=v=>Array.isArray(v)?v:[];
   async function boot(){
-    applySheetPref(); applyPanelPref(); applyVisibility();
+    applySplit(); applySheetPref(); applyPanelPref(); applyVisibility();
     if(READONLY){
       document.body.classList.add("readonly");
       $("#clientName").hidden=true; $("#roMeta").hidden=false; $("#roBadge").hidden=false;

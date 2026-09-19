@@ -190,7 +190,9 @@ main{flex:1;display:flex;min-height:0}
 
 /* Étiquettes (taille constante à l'écran) */
 .lblbox{position:absolute;transform:translate(-50%,-50%);pointer-events:none}
-.lblbox .meta{position:absolute;left:50%;top:86%;margin-top:2px;transform:translateX(-50%) scale(var(--inv,1));transform-origin:top center;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+/* L'étiquette se pose AU-DESSUS du marqueur : en dessous, elle masquait le terrain
+   que l'on vient regarder, et le curseur la recouvrait au survol. */
+.lblbox .meta{position:absolute;left:50%;bottom:86%;margin-bottom:2px;transform:translateX(-50%) scale(var(--inv,1));transform-origin:bottom center;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .lblbox.sel .meta{background:var(--leaf-dark)}
 /* Étiquettes intelligentes : masquée si elle en chevauche une autre, sauf sélection / survol */
 .lblbox.hide .meta,.zlbl.hide{visibility:hidden}
@@ -276,12 +278,27 @@ main{flex:1;display:flex;min-height:0}
    intervalle. Elles n'ont pas le même statut — la liste est le meuble où l'on range,
    la fiche est la surface de travail : plus claire et plus détachée. La fiche
    n'existe que s'il y a une sélection. */
-aside{width:var(--aside-w);flex:none;background:var(--ground-deep);display:flex;flex-direction:column;min-height:0;padding:10px;gap:10px}
+aside{width:var(--aside-w);flex:none;background:var(--ground-deep);display:flex;flex-direction:column;min-height:0;padding:10px;--elem-share:.66}
 body.nopanel aside{display:none}
 .panel{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.panel-elements{flex:1 1 auto;background:var(--ground);box-shadow:var(--shadow)}
-.panel-sheet{flex:0 1 auto;max-height:58%;background:var(--ground);box-shadow:var(--shadow-lg)}
-.panel-sheet.collapsed{flex:none;max-height:none}
+/* Les deux cartes se partagent la hauteur selon --elem-share, réglé à la poignée
+   ou par la flèche de la liste (deux tiers / un tiers). */
+/* Facteurs multipliés par 100 : leur somme doit rester ≥ 1, sinon une carte seule
+   (fiche masquée) ne prendrait qu'une fraction de la colonne au lieu de tout. */
+.panel-elements{flex-grow:calc(var(--elem-share)*100);flex-shrink:1;flex-basis:0;background:var(--ground);box-shadow:var(--shadow)}
+.panel-sheet{flex-grow:calc((1 - var(--elem-share))*100);flex-shrink:1;flex-basis:0;background:var(--ground);box-shadow:var(--shadow-lg)}
+.panel-sheet.collapsed{flex:none}
+.panel-elements.small .ph .chev{transform:rotate(-90deg)}
+/* La flèche prend de la largeur : le titre « Éléments » reste entier, c'est le
+   décompte qui s'abrège si la place manque (le titre de la fiche, lui, doit
+   pouvoir se réduire : un nom de plante est long). */
+.panel-elements .ph h2{flex:none}
+#elCount{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* Poignée de partage : elle tient lieu d'écart entre les deux cartes */
+.split{flex:none;height:10px;cursor:row-resize;display:flex;align-items:center;justify-content:center;touch-action:none}
+.split::after{content:"";width:44px;height:3px;border-radius:2px;background:var(--line);transition:background .15s,width .15s}
+.split:hover::after,.split.on::after{background:var(--leaf);width:64px}
+.split:focus-visible{outline:2px solid var(--pollen-dark);outline-offset:-1px;border-radius:4px}
 .panel-sheet.collapsed .pbody{display:none}
 .panel-sheet.collapsed .ph .chev{transform:rotate(-90deg)}
 .ph{display:flex;align-items:center;gap:8px;padding:10px 11px 8px;flex:none}
@@ -382,7 +399,10 @@ body.nopanel aside{display:none}
 
 /* Fiche */
 .sheet-empty{color:var(--muted);font-size:13px;text-align:center;padding:26px 10px;line-height:1.55}
-.sheet-actions{display:flex;justify-content:flex-end;gap:6px;margin:2px 0 12px}
+/* Alignées à gauche, sur le même bord que les libellés et les champs : à droite,
+   elles flottaient seules et cassaient la seule ligne verticale de la fiche.
+   Le filet les sépare du formulaire sans en faire un bloc de plus. */
+.sheet-actions{display:flex;justify-content:flex-start;gap:6px;margin:2px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
 .field{margin-bottom:11px}
 .field label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
 .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--ink);background:#fff;resize:vertical}
